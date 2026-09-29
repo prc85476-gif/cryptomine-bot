@@ -1,4 +1,6 @@
-const { Bot } = require('node-telegram-bot-api');
+const fs = require('fs');
+const path = require('path');
+const { Bot, InputFile } = require('node-telegram-bot-api');
 const dbService = require('./dbService');
 const db = require('../config/db');
 
@@ -87,7 +89,7 @@ class MainBotService {
         // 4. Prepare Mini App WebApp URL
         const appUrl = (process.env.MINI_APP_URL || 'https://cryptomine-app.com').trim();
 
-        // 5. Send Rich Welcome Message with "Mint NFT" Button
+        // 5. Rich Welcome Message Caption
         const welcomeMessage = `👋 <b>Welcome ${firstName}!</b> 💎⚡
 
 🤖 <b>CryptoMine — NFT & Cloud Mining</b>
@@ -102,23 +104,75 @@ class MainBotService {
 
 👇 <b>Click below to launch the Mini App & start mining:</b>`;
 
-        const buttonOptions = {
-          chat_id: chatId,
-          text: welcomeMessage,
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: '💎 Mint NFT',
-                  web_app: { url: appUrl }
-                }
-              ]
+        const replyMarkup = {
+          inline_keyboard: [
+            [
+              {
+                text: '💎 Mint NFT',
+                web_app: { url: appUrl }
+              }
             ]
-          }
+          ]
         };
 
-        await this.bot.api.sendMessage(buttonOptions);
+        // 6. Send Video with Caption and "Mint NFT" WebApp Button
+        let videoSent = false;
+        const videoCandidates = [
+          path.join(process.cwd(), 'public/assets/videos/welcome.mp4'),
+          path.join(__dirname, '../../public/assets/videos/welcome.mp4'),
+          path.join(process.cwd(), 'icon logo/gemini_generated_video_22e01621.mp4'),
+          path.join(__dirname, '../../icon logo/gemini_generated_video_22e01621.mp4')
+        ];
+
+        let validVideoPath = null;
+        for (const candidate of videoCandidates) {
+          if (fs.existsSync(candidate)) {
+            validVideoPath = candidate;
+            break;
+          }
+        }
+
+        if (validVideoPath && InputFile) {
+          try {
+            await this.bot.api.sendVideo({
+              chat_id: chatId,
+              video: new InputFile(validVideoPath),
+              caption: welcomeMessage,
+              parse_mode: 'HTML',
+              reply_markup: replyMarkup
+            });
+            videoSent = true;
+          } catch (videoErr) {
+            console.warn('sendVideo error in /start, trying fallback:', videoErr.message);
+          }
+        }
+
+        // If local video upload was not completed, try sending via static URL
+        if (!videoSent && appUrl && appUrl.startsWith('https://')) {
+          try {
+            const videoUrl = `${appUrl.replace(/\/+$/, '')}/assets/videos/welcome.mp4`;
+            await this.bot.api.sendVideo({
+              chat_id: chatId,
+              video: videoUrl,
+              caption: welcomeMessage,
+              parse_mode: 'HTML',
+              reply_markup: replyMarkup
+            });
+            videoSent = true;
+          } catch (urlErr) {
+            console.warn('sendVideo via static URL error:', urlErr.message);
+          }
+        }
+
+        // Fallback to text message if video delivery fails
+        if (!videoSent) {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: welcomeMessage,
+            parse_mode: 'HTML',
+            reply_markup: replyMarkup
+          });
+        }
       } catch (err) {
         console.error('Error handling /start in Main Bot:', err.message);
       }
