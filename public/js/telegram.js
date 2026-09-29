@@ -76,7 +76,28 @@ const TelegramService = {
     } catch (e) {
       return null;
     }
+  },
+
+  openTelegram(url) {
+    if (this.tg?.openTelegramLink) {
+      try {
+        this.tg.openTelegramLink(url);
+        return;
+      } catch (e) {
+        console.warn('openTelegramLink error:', e);
+      }
+    }
+    if (this.tg?.openLink) {
+      try {
+        this.tg.openLink(url);
+        return;
+      } catch (e) {
+        console.warn('openLink error:', e);
+      }
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 };
 
 window.TelegramService = TelegramService;
+

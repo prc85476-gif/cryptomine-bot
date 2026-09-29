@@ -117,9 +117,20 @@
   color: var(--text-primary);
   text-decoration: none;
   position: relative;
-  box-shadow: none;
-  cursor: default;
-  pointer-events: none;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: all var(--transition-fast);
+}
+
+.header-action-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(37, 99, 235, 0.1);
+  border-color: rgba(37, 99, 235, 0.4);
+}
+
+.header-action-btn:active {
+  transform: scale(0.95);
 }
 
 .header-action-btn.support-btn svg {

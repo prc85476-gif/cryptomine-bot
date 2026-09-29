@@ -130,6 +130,26 @@ const App = {
       });
     });
 
+    // Header Support bot button (@CryptoMint_Support_bot)
+    const supportBtn = document.getElementById('header-support-btn');
+    if (supportBtn) {
+      supportBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.TelegramService.hapticImpact('light');
+        window.TelegramService.openTelegram('https://t.me/CryptoMint_Support_bot');
+      });
+    }
+
+    // Header Telegram Channel button (https://t.me/cryptomintwithdraw)
+    const telegramBtn = document.getElementById('header-telegram-btn');
+    if (telegramBtn) {
+      telegramBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.TelegramService.hapticImpact('light');
+        window.TelegramService.openTelegram('https://t.me/cryptomintwithdraw');
+      });
+    }
+
     // Profile icon in header
     const profileBtn = document.getElementById('header-profile-btn');
     if (profileBtn) {
