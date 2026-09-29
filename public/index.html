@@ -928,12 +928,29 @@
           <!-- 1. Top-up Amount Section -->
           <div class="withdraw-field-group">
             <label class="withdraw-section-label">Top-up amount</label>
-            <div class="withdraw-amount-card">
-              <input type="number" id="topup-amount-input" class="withdraw-amount-input" value="3" min="1" step="1" />
+            <div class="withdraw-amount-card" id="deposit-amount-card">
+              <input type="number" id="topup-amount-input" class="withdraw-amount-input" value="1" min="1" step="any" placeholder="1.00" />
               <span class="withdraw-amount-unit" id="topup-amount-currency">USDT</span>
+            </div>
+            <!-- Dynamic Red Validation Error Message -->
+            <div class="deposit-error-msg" id="deposit-amount-error" style="display: none;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; flex-shrink: 0;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span>Minimum deposit amount is 1 USDT ($1)</span>
             </div>
             <!-- Quick Preset Amount Pills -->
             <div class="deposit-presets-row">
+              <button type="button" class="preset-pill active" data-amt="1">
+                <span class="preset-pill-num">1</span>
+                <span class="preset-pill-unit">USDT</span>
+              </button>
+              <button type="button" class="preset-pill" data-amt="3">
+                <span class="preset-pill-num">3</span>
+                <span class="preset-pill-unit">USDT</span>
+              </button>
               <button type="button" class="preset-pill" data-amt="5">
                 <span class="preset-pill-num">5</span>
                 <span class="preset-pill-unit">USDT</span>
@@ -942,16 +959,12 @@
                 <span class="preset-pill-num">10</span>
                 <span class="preset-pill-unit">USDT</span>
               </button>
-              <button type="button" class="preset-pill" data-amt="30">
-                <span class="preset-pill-num">30</span>
+              <button type="button" class="preset-pill" data-amt="50">
+                <span class="preset-pill-num">50</span>
                 <span class="preset-pill-unit">USDT</span>
               </button>
               <button type="button" class="preset-pill" data-amt="100">
                 <span class="preset-pill-num">100</span>
-                <span class="preset-pill-unit">USDT</span>
-              </button>
-              <button type="button" class="preset-pill" data-amt="300">
-                <span class="preset-pill-num">300</span>
                 <span class="preset-pill-unit">USDT</span>
               </button>
             </div>

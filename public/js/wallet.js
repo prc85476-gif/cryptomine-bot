@@ -3,8 +3,8 @@
  */
 const WalletModule = {
   currentDepositNetwork: 'USDT BEP20',
-  currentDepositAmount: 3,
-  currentExactAmount: '3.0000',
+  currentDepositAmount: 1,
+  currentExactAmount: '1.0000',
   depositAddress: '0x91AbcbAbE89945De4e491bf8850Bae836dB66547',
   currentWithdrawNetwork: 'USDT BEP20',
   depositPollInterval: null,
@@ -68,10 +68,17 @@ const WalletModule = {
     if (liveDesc) liveDesc.textContent = 'We check incoming payments automatically';
     if (liveBadge) liveBadge.innerHTML = '<span class="live-dot"></span><span>LIVE</span>';
 
-    // Default amount 3
+    // Reset error state
+    const amtCard = document.getElementById('deposit-amount-card');
+    const errEl = document.getElementById('deposit-amount-error');
+    if (amtCard) amtCard.classList.remove('input-error');
+    if (errEl) errEl.style.display = 'none';
+
+    // Default amount 1 USDT
+    this.currentDepositAmount = this.currentDepositAmount >= 1 ? this.currentDepositAmount : 1;
     const amtInput = document.getElementById('topup-amount-input');
     if (amtInput) {
-      amtInput.value = this.currentDepositAmount || '3';
+      amtInput.value = this.currentDepositAmount || '1';
     }
 
     // Preset pills highlight
@@ -177,10 +184,29 @@ const WalletModule = {
     }, 2500);
   },
 
+  validateDepositAmount(amt) {
+    const amtCard = document.getElementById('deposit-amount-card');
+    const errEl = document.getElementById('deposit-amount-error');
+    const num = parseFloat(amt);
+
+    if (isNaN(num) || num < 1) {
+      if (amtCard) amtCard.classList.add('input-error');
+      if (errEl) errEl.style.display = 'flex';
+      return false;
+    } else {
+      if (amtCard) amtCard.classList.remove('input-error');
+      if (errEl) errEl.style.display = 'none';
+      return true;
+    }
+  },
+
   bindDepositEvents() {
     // Preset amount pills
     const pills = document.querySelectorAll('.preset-pill');
     const amtInput = document.getElementById('topup-amount-input');
+    const amtCard = document.getElementById('deposit-amount-card');
+    const errEl = document.getElementById('deposit-amount-error');
+
     pills.forEach(pill => {
       pill.addEventListener('click', () => {
         window.TelegramService.hapticSelection();
@@ -188,14 +214,20 @@ const WalletModule = {
         pill.classList.add('active');
         const val = pill.dataset.amt;
         if (amtInput) amtInput.value = val;
-        this.currentDepositAmount = parseFloat(val) || 3;
+        this.currentDepositAmount = parseFloat(val) || 1;
+        this.validateDepositAmount(this.currentDepositAmount);
       });
     });
 
     if (amtInput) {
       amtInput.addEventListener('input', () => {
         const val = amtInput.value;
-        this.currentDepositAmount = parseFloat(val) || 0;
+        const num = parseFloat(val);
+        this.currentDepositAmount = isNaN(num) ? 0 : num;
+        
+        // Live validation: turns red and shows error if < 1
+        this.validateDepositAmount(this.currentDepositAmount);
+
         pills.forEach(p => {
           if (p.dataset.amt === val) p.classList.add('active');
           else p.classList.remove('active');
@@ -219,9 +251,20 @@ const WalletModule = {
     const proceedBtn = document.getElementById('btn-proceed-topup');
     if (proceedBtn) {
       proceedBtn.addEventListener('click', () => {
-        const amt = parseFloat(amtInput?.value) || 0;
-        if (amt < 1) {
-          window.ModalManager.showToast('Minimum deposit amount is 1 USDT', 'error');
+        const amt = parseFloat(amtInput?.value);
+        if (isNaN(amt) || amt < 1) {
+          window.TelegramService.hapticNotification('error');
+          this.validateDepositAmount(amt);
+          
+          // Re-trigger shake animation
+          if (amtCard) {
+            amtCard.classList.remove('input-error');
+            void amtCard.offsetWidth; // trigger reflow
+            amtCard.classList.add('input-error');
+          }
+
+          window.ModalManager.showToast('Minimum deposit amount is 1 USDT ($1)', 'error');
+          if (amtInput) amtInput.focus();
           return;
         }
 
