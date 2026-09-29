@@ -853,19 +853,25 @@
    ========================================================================== */
 .home-promo-banner-card {
   width: 100%;
-  border-radius: 0 !important;
+  border-radius: 14px;
   overflow: hidden;
-  box-shadow: none;
-  border: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(226, 232, 240, 0.8);
   cursor: pointer;
   position: relative;
-  transition: opacity var(--transition-fast);
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
   background: transparent;
   display: block;
 }
 
+[data-theme="dark"] .home-promo-banner-card {
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
 .home-promo-banner-card:hover, .home-promo-banner-card:active {
-  opacity: 0.92;
+  opacity: 0.95;
+  transform: translateY(-1px);
 }
 
 .promo-banner-img {
@@ -873,7 +879,7 @@
   height: auto;
   display: block;
   object-fit: cover;
-  border-radius: 0 !important;
+  border-radius: 14px;
 }
 
 .vip-banner-card {
