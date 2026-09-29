@@ -143,6 +143,32 @@ ${walletStatus}
       }
     });
 
+    // /testchannel command: Test posting to @cryptomintwithdraw proof channel
+    this.bot.command('testchannel', async (ctx) => {
+      try {
+        await this.broadcastWithdrawalToProofChannel({
+          username: ctx.from?.username || 'cryptominer_pro',
+          amount: 0.2600,
+          fromAddress: '0x9cccFDFfa030A90bEBd73c7dB610B5E05Eb8Bd040a6',
+          toAddress: '0xc1e779a78e778401fa9bb270d4c82b9a71726bd',
+          txHash: '0x932070f170ae4930c8e86d71a7dd993e06fea72d24ac5afbfd1d6af7174cc1ce',
+          bscScanUrl: 'https://bscscan.com/tx/0x932070f170ae4930c8e86d71a7dd993e06fea72d24ac5afbfd1d6af7174cc1ce'
+        });
+
+        await this.bot.api.sendMessage({
+          chat_id: ctx.chatId,
+          text: '✅ <b>Test message broadcasted to @cryptomintwithdraw channel!</b>',
+          parse_mode: 'HTML'
+        });
+      } catch (err) {
+        await this.bot.api.sendMessage({
+          chat_id: ctx.chatId,
+          text: `❌ <b>Failed to post to channel:</b> <code>${err.message}</code>\n\nEnsure @acryptomintadminwithdraw2bot is an Admin in @cryptomintwithdraw with post permission.`,
+          parse_mode: 'HTML'
+        });
+      }
+    });
+
     // /ban command: /ban <userId>
     this.bot.command('ban', async (ctx) => {
       try {
@@ -371,6 +397,16 @@ ${walletStatus}
               txHash: payoutResult.txHash,
               bscScanUrl: payoutResult.bscScanUrl
             }).catch((e) => console.warn('Could not notify user on approval:', e.message));
+
+            // 📢 Auto Broadcast to @cryptomintwithdraw payment proof channel
+            this.broadcastWithdrawalToProofChannel({
+              username: withdrawal.username,
+              amount: withdrawal.finalReceived,
+              fromAddress: payoutResult.sender || '0x9cccFDFfa030A90bEBd73c7dB610B5E05Eb8Bd040a6',
+              toAddress: withdrawal.address,
+              txHash: payoutResult.txHash,
+              bscScanUrl: payoutResult.bscScanUrl
+            }).catch((e) => console.warn('Proof channel broadcast error:', e.message));
 
             // Clean concise summary for Admin Bot (no BscScan preview/card on admin chat, goes to user)
             const adminSuccessText = `✅ <b>WITHDRAWAL APPROVED & PAID!</b>
@@ -658,6 +694,84 @@ ${walletStatus}
       return sent;
     } catch (err) {
       console.error('❌ Failed to send Telegram withdrawal alert:', err.message);
+    }
+  }
+
+  /**
+   * Broadcast Confirmed Withdrawal to Public Proof Channel (@cryptomintwithdraw)
+   */
+  async broadcastWithdrawalToProofChannel(data) {
+    if (!this.bot) {
+      console.warn('⚠️ Telegram Admin Bot not ready for channel broadcast.');
+      return;
+    }
+
+    const channelId = process.env.PAYOUT_PROOF_CHANNEL || '@cryptomintwithdraw';
+    const {
+      username,
+      amount,
+      fromAddress,
+      toAddress,
+      txHash,
+      bscScanUrl
+    } = data;
+
+    const rawUser = username ? String(username).replace(/^@/, '') : 'Miner';
+    const cleanUsername = `@${rawUser}`;
+    const formattedAmount = parseFloat(amount || 0).toFixed(4);
+
+    const formatShort = (addr) => {
+      if (!addr) return '0x0000...0000';
+      const str = String(addr).trim();
+      if (str.length <= 12) return str;
+      return `${str.substring(0, 6)}...${str.substring(str.length - 4)}`;
+    };
+
+    const fromShort = formatShort(fromAddress || '0x9cccFDFfa030A90bEBd73c7dB610B5E05Eb8Bd040a6');
+    const toShort = formatShort(toAddress);
+    const cleanBscUrl = bscScanUrl || `https://bscscan.com/tx/${txHash}`;
+
+    // Format Time: e.g. Sep 29, 2026, 9:57:51 PM
+    const timeStr = new Date().toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+
+    const channelMessage = `🚀 <b>New Withdrawal Confirmed! (BSC Network)</b>
+
+🌐 <b>Username:</b> ${cleanUsername}
+💰 <b>Amount:</b> ${formattedAmount} USDT
+📤 <b>From:</b> <code>${fromShort}</code>
+📥 <b>To:</b> <code>${toShort}</code>
+🌐 <b>Network:</b> Binance Smart Chain (BEP-20)
+🕒 <b>Time:</b> ${timeStr}
+
+🔗 <a href="${cleanBscUrl}">View on BscScan</a>`;
+
+    try {
+      const sent = await this.bot.api.sendMessage({
+        chat_id: channelId,
+        text: channelMessage,
+        parse_mode: 'HTML',
+        disable_web_page_preview: false,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '🔍 View on BscScan', url: cleanBscUrl }
+            ]
+          ]
+        }
+      });
+      console.log(`📢 Broadcasted confirmed withdrawal to ${channelId} successfully!`);
+      return sent;
+    } catch (err) {
+      console.error(`❌ Failed to post withdrawal proof to ${channelId}:`, err.message);
+      throw err;
     }
   }
 }
