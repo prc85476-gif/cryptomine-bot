@@ -26,6 +26,20 @@ const LiveWithdrawalPopup = {
     4.10, 4.25, 4.50, 4.75, 4.90, 5.00
   ],
 
+  CHANNEL_URL: 'https://t.me/cryptomintwithdraw',
+
+  openChannel() {
+    if (window.TelegramService?.hapticImpact) {
+      window.TelegramService.hapticImpact('medium');
+    }
+    const url = this.CHANNEL_URL;
+    if (window.Telegram?.WebApp?.openTelegramLink) {
+      window.Telegram.WebApp.openTelegramLink(url);
+    } else {
+      window.open(url, '_blank');
+    }
+  },
+
   init() {
     if (this.isInitialized) return;
     this.container = document.getElementById('live-withdrawal-popup');
@@ -98,9 +112,10 @@ const LiveWithdrawalPopup = {
       this.handleRelease();
     });
 
-    // 3. Click / Tap to dismiss
+    // 3. Click / Tap to open channel link (or swipe to dismiss)
     this.container.addEventListener('click', (e) => {
-      if (Math.abs(this.diffX) < 8) {
+      if (Math.abs(this.diffX) < 10) {
+        this.openChannel();
         this.dismissImmediately('left');
       }
     });
