@@ -1,0 +1,94 @@
+/* ==========================================================================
+   Animations & Particle FX for Crypto Mining Mini App
+   ========================================================================== */
+
+/* Shimmer Border for VIP & Rare NFTs */
+.shimmer-glow {
+  position: relative;
+}
+
+.shimmer-glow::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, #00F0FF, #9D4EDD, #FFB800, #00E599, #00F0FF);
+  border-radius: inherit;
+  z-index: -1;
+  background-size: 400%;
+  animation: borderGlow 6s linear infinite;
+  opacity: 0.6;
+}
+
+@keyframes borderGlow {
+  0% { background-position: 0 0; }
+  50% { background-position: 400% 0; }
+  100% { background-position: 0 0; }
+}
+
+/* Floating Reward Sparkle / Coin */
+.floating-sparkle {
+  position: fixed;
+  pointer-events: none;
+  font-weight: 800;
+  font-size: 16px;
+  color: #00E599;
+  text-shadow: 0 0 10px rgba(0, 229, 153, 0.8), 0 2px 4px rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  animation: floatUpAndFade 1.2s ease-out forwards;
+}
+
+@keyframes floatUpAndFade {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-40px) scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-80px) scale(1);
+  }
+}
+
+/* Mining Hit Shake */
+.mine-active-shake {
+  animation: minerHitShake 0.4s ease-in-out;
+}
+
+@keyframes minerHitShake {
+  0% { transform: scale(1); }
+  25% { transform: scale(0.96) rotate(-2deg); }
+  50% { transform: scale(1.03) rotate(2deg); }
+  75% { transform: scale(0.98) rotate(-1deg); }
+  100% { transform: scale(1); }
+}
+
+/* Rotating Pickaxe Icon */
+@keyframes pickaxeSwing {
+  0% { transform: rotate(0deg); }
+  30% { transform: rotate(-35deg); }
+  60% { transform: rotate(20deg); }
+  100% { transform: rotate(0deg); }
+}
+
+.swing-anim {
+  animation: pickaxeSwing 0.5s ease;
+}
+
+/* Skeleton Loading State */
+.skeleton {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.05) 25%, rgba(255, 255, 255, 0.12) 50%, rgba(255, 255, 255, 0.05) 75%);
+  background-size: 200% 100%;
+  animation: skeletonLoad 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes skeletonLoad {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

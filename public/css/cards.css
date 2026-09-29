@@ -1,0 +1,966 @@
+/* ==========================================================================
+   Cards, Main Miner Component, Action Buttons & Quick Grid
+   ========================================================================== */
+
+/* 1. Total Balance Card */
+.total-balance-card {
+  width: 100%;
+  border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, #0A1E5C 0%, #1545C6 45%, #0099B8 100%);
+  position: relative;
+  overflow: hidden;
+  padding: 22px 20px;
+  box-shadow: 0 10px 30px rgba(10, 30, 92, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+  margin-bottom: 14px;
+}
+
+.balance-card-bg {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 52%;
+  background-image: url('/assets/images/pickaxe-crystal.jpg');
+  background-size: cover;
+  background-position: center right;
+  opacity: 0.85;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  mask-image: linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%);
+  -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%);
+}
+
+.balance-card-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.balance-card-left {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.balance-card-right {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Option 1: NFT Balance Box (Deposit Balance) */
+.nft-balance-box {
+  background: rgba(4, 21, 56, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 104px;
+  box-shadow: none; /* No glow effect as requested */
+}
+
+.side-box-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #CBD5E1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.side-box-value-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-top: 1px;
+}
+
+.side-box-val {
+  font-size: 15px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  color: #FFFFFF;
+}
+
+.side-box-unit {
+  font-size: 10px;
+  font-weight: 700;
+  color: #00E599;
+}
+
+/* Option 2: Withdraw Button (Clean No Glow Box) */
+.balance-side-withdraw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #FFFFFF;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  outline: none;
+  min-width: 104px;
+  box-shadow: none; /* No glow effect */
+  transition: all var(--transition-fast);
+}
+
+.balance-side-withdraw-btn:hover {
+  background: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.45);
+  transform: translateY(-1px);
+  box-shadow: none;
+}
+
+.balance-side-withdraw-btn:active {
+  transform: translateY(0);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.balance-side-withdraw-btn svg {
+  width: 13px;
+  height: 13px;
+  stroke: #FFFFFF;
+}
+
+.balance-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wallet-icon-box {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.wallet-icon-box svg {
+  width: 17px;
+  height: 17px;
+}
+
+.balance-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #E2E8F0;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.balance-amount-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 2px 0;
+}
+
+.balance-value {
+  font-size: 30px;
+  font-weight: 900;
+  color: #FFFFFF;
+  letter-spacing: -0.8px;
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
+}
+
+.balance-currency {
+  font-size: 14px;
+  font-weight: 800;
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 7px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.mining-rate-pill {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(4, 21, 56, 0.65);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  color: var(--neon-cyan);
+  font-size: 11.5px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.mining-rate-pill svg {
+  width: 13px;
+  height: 13px;
+  color: #00E599;
+}
+
+.mining-rate-text {
+  color: #00E599;
+}
+
+/* ==========================================================================
+   2. "Your NFT Miner" Main Card
+   ========================================================================== */
+.nft-miner-card {
+  width: 100%;
+  border-radius: var(--radius-xl);
+  background: var(--bg-card);
+  border: var(--border-card);
+  padding: 16px 18px 18px 18px;
+  margin-bottom: 14px;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.02);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+[data-theme="dark"] .nft-miner-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+}
+
+.card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 2px;
+}
+
+.card-title-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(124, 58, 237, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--neon-purple);
+}
+
+.card-title-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.card-title-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-white);
+  letter-spacing: -0.2px;
+}
+
+/* Miner Profile Row (Avatar + Meta) */
+.miner-profile-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.miner-avatar-wrap {
+  width: 62px;
+  height: 62px;
+  border-radius: 16px;
+  position: relative;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #0284C7, #7C3AED);
+  padding: 2px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.miner-avatar-wrap img {
+  width: 100%;
+  height: 100%;
+  border-radius: 14px;
+  object-fit: cover;
+  display: block;
+  background: var(--bg-primary);
+}
+
+.miner-avatar-wrap .level-badge {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  color: #FFFFFF;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  border: 1.5px solid #FFFFFF;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35);
+  letter-spacing: 0.2px;
+}
+
+[data-theme="dark"] .miner-avatar-wrap .level-badge {
+  border-color: var(--bg-card);
+}
+
+.miner-meta-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.miner-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.miner-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-white);
+  letter-spacing: -0.3px;
+  margin: 0;
+}
+
+.miner-sub-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.miner-sub-tag svg {
+  width: 13px;
+  height: 13px;
+  color: #0284C7;
+  flex-shrink: 0;
+}
+
+/* 3-Col Spacious Stats Card */
+.miner-stats-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #F8FAFC;
+  border-radius: var(--radius-md);
+  padding: 10px 8px;
+  border: 1px solid #E2E8F0;
+}
+
+[data-theme="dark"] .miner-stats-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.miner-stat-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.stat-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.stat-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.stat-indicator.emerald { background: #10B981; }
+.stat-indicator.cyan { background: #0284C7; }
+.stat-indicator.purple { background: #8B5CF6; }
+
+.stat-numeric {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  letter-spacing: -0.2px;
+}
+
+.miner-stat-sep {
+  width: 1px;
+  height: 24px;
+  background: #E2E8F0;
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
+[data-theme="dark"] .miner-stat-sep {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Progress Box */
+.miner-progress-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.miner-progress-labels {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.prog-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.prog-counter {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-feature-settings: "tnum";
+}
+
+.progress-track {
+  width: 100%;
+  height: 6px;
+  background: #E2E8F0;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+}
+
+[data-theme="dark"] .progress-track {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.progress-fill {
+  height: 100%;
+  width: 46%;
+  background: linear-gradient(90deg, #10B981 0%, #0284C7 100%);
+  border-radius: var(--radius-full);
+  transition: width 0.4s ease;
+}
+
+/* ==========================================================================
+   3. Single Large Full-Width "Claim Mining" Button
+   ========================================================================== */
+.primary-actions-row {
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+.action-btn-claim-full {
+  width: 100%;
+  height: 56px;
+  border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, #00E599 0%, #00C49F 50%, #00B4D8 100%);
+  color: #032018;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12); /* Clean shadow - NO GLOW */
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: transform var(--transition-fast), background var(--transition-fast);
+}
+
+.action-btn-claim-full:hover {
+  background: linear-gradient(135deg, #00F0A0 0%, #00D0A8 50%, #00BEE2 100%);
+}
+
+.action-btn-claim-full:active {
+  transform: scale(0.98);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.claim-btn-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.claim-btn-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(3, 32, 24, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.claim-btn-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke: #032018;
+  stroke-width: 2.5;
+}
+
+.claim-btn-text-group {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.claim-btn-main-title {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  color: #032018;
+  line-height: 1.15;
+}
+
+.claim-btn-subtitle {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: rgba(3, 32, 24, 0.88);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  letter-spacing: 0.2px;
+}
+
+.claim-btn-arrow {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(3, 32, 24, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.claim-btn-arrow svg {
+  width: 15px;
+  height: 15px;
+  stroke: #032018;
+  stroke-width: 3;
+}
+
+.action-btn-claim-full::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(60deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transform: rotate(30deg);
+  animation: shineBtn 3.5s infinite;
+}
+
+.action-btn-claim-full.claim-ready {
+  background: linear-gradient(135deg, #00E599 0%, #10B981 50%, #00F0FF 100%);
+  animation: pulseClaimReady 2s infinite ease-in-out;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.action-btn-claim-full.claim-ready .claim-btn-subtitle {
+  color: #032018;
+  font-weight: 800;
+}
+
+@keyframes pulseClaimReady {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 4px 14px rgba(0, 229, 153, 0.25);
+  }
+  50% {
+    transform: scale(1.015);
+    box-shadow: 0 6px 20px rgba(0, 229, 153, 0.45);
+  }
+}
+
+/* ==========================================================================
+   4. Quick Action Grid (Profile Duo Card Inspired Style)
+   ========================================================================== */
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.quick-card {
+  position: relative;
+  background: #FFFFFF;
+  border-radius: 18px;
+  padding: 12px 10px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 98px;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.quick-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.08);
+}
+
+.quick-card:active {
+  transform: scale(0.97);
+}
+
+/* Card 1: Deposit (Emerald Green) */
+.quick-card.deposit {
+  border: 1.5px solid rgba(16, 185, 129, 0.45);
+}
+
+/* Card 2: Withdraw (Sky / Blue) */
+.quick-card.withdraw {
+  border: 1.5px solid rgba(2, 132, 199, 0.45);
+}
+
+/* Card 3: Referral (Purple / Violet) */
+.quick-card.referral {
+  border: 1.5px solid rgba(124, 58, 237, 0.45);
+}
+
+/* Dark Mode Overrides */
+[data-theme="dark"] .quick-card {
+  background: #101c3d;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] .quick-card.deposit {
+  border: 1.5px solid rgba(16, 185, 129, 0.35);
+}
+
+[data-theme="dark"] .quick-card.withdraw {
+  border: 1.5px solid rgba(56, 189, 248, 0.35);
+}
+
+[data-theme="dark"] .quick-card.referral {
+  border: 1.5px solid rgba(168, 85, 247, 0.35);
+}
+
+.quick-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  position: relative;
+  z-index: 2;
+  gap: 4px;
+}
+
+.quick-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #0F172A;
+  letter-spacing: -0.2px;
+  padding-top: 2px;
+}
+
+[data-theme="dark"] .quick-title {
+  color: #FFFFFF;
+}
+
+/* Top-Right Circular Floating Badges */
+.quick-circle-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #FFFFFF;
+  transition: transform var(--transition-fast);
+}
+
+.quick-card:hover .quick-circle-badge {
+  transform: scale(1.08);
+}
+
+.quick-circle-badge.badge-deposit {
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  box-shadow: 0 3px 10px rgba(16, 185, 129, 0.35);
+}
+
+.quick-circle-badge.badge-withdraw {
+  background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%);
+  box-shadow: 0 3px 10px rgba(2, 132, 199, 0.35);
+}
+
+.quick-circle-badge.badge-referral {
+  background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%);
+  box-shadow: 0 3px 10px rgba(124, 58, 237, 0.35);
+}
+
+.quick-circle-badge svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* Bottom Subtitle / Rate Pill */
+.quick-card-bottom {
+  position: relative;
+  z-index: 2;
+  margin-top: 6px;
+}
+
+.quick-sub-pill {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 20px;
+  white-space: nowrap;
+  letter-spacing: 0.1px;
+}
+
+.quick-sub-pill.pill-deposit {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+[data-theme="dark"] .quick-sub-pill.pill-deposit {
+  color: #10B981;
+}
+
+.quick-sub-pill.pill-withdraw {
+  background: rgba(2, 132, 199, 0.1);
+  color: #0284C7;
+  border: 1px solid rgba(2, 132, 199, 0.2);
+}
+
+[data-theme="dark"] .quick-sub-pill.pill-withdraw {
+  color: #38BDF8;
+}
+
+.quick-sub-pill.pill-referral {
+  background: rgba(124, 58, 237, 0.1);
+  color: #7C3AED;
+  border: 1px solid rgba(124, 58, 237, 0.2);
+}
+
+[data-theme="dark"] .quick-sub-pill.pill-referral {
+  color: #C084FC;
+}
+
+/* Watermarks */
+.quick-watermark {
+  position: absolute;
+  bottom: -3px;
+  right: -5px;
+  width: 76px;
+  height: 48px;
+  pointer-events: none;
+  z-index: 1;
+  filter: blur(0.9px);
+  transition: opacity var(--transition-fast), transform var(--transition-fast), filter var(--transition-fast);
+}
+
+.quick-watermark svg {
+  width: 100%;
+  height: 100%;
+}
+
+.quick-card:hover .quick-watermark {
+  transform: scale(1.05);
+  filter: blur(0.5px);
+  opacity: 0.36 !important;
+}
+
+.quick-watermark.watermark-deposit {
+  color: #10B981;
+  opacity: 0.25;
+}
+
+[data-theme="dark"] .quick-watermark.watermark-deposit {
+  color: #34D399;
+  opacity: 0.22;
+}
+
+.quick-watermark.watermark-withdraw {
+  color: #0284C7;
+  opacity: 0.25;
+}
+
+[data-theme="dark"] .quick-watermark.watermark-withdraw {
+  color: #38BDF8;
+  opacity: 0.22;
+}
+
+.quick-watermark.watermark-referral {
+  color: #7C3AED;
+  opacity: 0.25;
+}
+
+[data-theme="dark"] .quick-watermark.watermark-referral {
+  color: #C084FC;
+  opacity: 0.22;
+}
+
+/* ==========================================================================
+   5. Home Promo / Invite Friends Banner
+   ========================================================================== */
+.home-promo-banner-card {
+  width: 100%;
+  border-radius: 0 !important;
+  overflow: hidden;
+  box-shadow: none;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: opacity var(--transition-fast);
+  background: transparent;
+  display: block;
+}
+
+.home-promo-banner-card:hover, .home-promo-banner-card:active {
+  opacity: 0.92;
+}
+
+.promo-banner-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+  border-radius: 0 !important;
+}
+
+.vip-banner-card {
+  width: 100%;
+  border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, #150e2d 0%, #2a0845 50%, #1a0836 100%);
+  border: 1px solid rgba(255, 184, 0, 0.28);
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(255, 184, 0, 0.15);
+}
+
+.vip-banner-bg {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 50%;
+  background-image: url('/assets/images/vip-banner.jpg');
+  background-size: cover;
+  background-position: center right;
+  opacity: 0.9;
+  mix-blend-mode: lighten;
+  pointer-events: none;
+  mask-image: linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%);
+  -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%);
+}
+
+.vip-banner-content {
+  position: relative;
+  z-index: 2;
+  width: 65%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vip-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vip-crown-icon {
+  color: #FFB800;
+  filter: drop-shadow(0 0 6px rgba(255, 184, 0, 0.6));
+}
+
+.vip-crown-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.vip-banner-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-white);
+}
+
+.vip-banner-title span {
+  color: #FFB800;
+  text-shadow: 0 0 10px rgba(255, 184, 0, 0.5);
+}
+
+.vip-banner-desc {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.35;
+}
+
+.vip-upgrade-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background: var(--grad-vip-btn);
+  color: #2D1400;
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: 0 4px 12px rgba(255, 184, 0, 0.4);
+  margin-top: 4px;
+}
+
+.vip-upgrade-btn svg {
+  width: 13px;
+  height: 13px;
+}

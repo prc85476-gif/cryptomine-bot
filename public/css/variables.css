@@ -1,0 +1,135 @@
+/* ==========================================================================
+   CryptoMine Design System Tokens & Variables
+   Theme: Supports Crisp White / Light Mode and Premium Dark Crypto Mode
+   ========================================================================== */
+
+:root {
+  /* Default: White / Light Theme */
+  --bg-app: #EAEFF5;
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F1F5F9;
+  --bg-card-glass: rgba(255, 255, 255, 0.92);
+  --bg-card-elevated: #FFFFFF;
+  --bg-input: #F1F5F9;
+  --bg-overlay: rgba(15, 23, 42, 0.65);
+  --header-bg: rgba(255, 255, 255, 0.92);
+  --nav-bg: rgba(255, 255, 255, 0.95);
+
+  /* Primary Neon & Brand Colors */
+  --neon-cyan: #0284C7;
+  --neon-cyan-glow: rgba(2, 132, 199, 0.25);
+  --neon-blue: #2563EB;
+  --neon-blue-glow: rgba(37, 99, 235, 0.25);
+  --neon-purple: #7C3AED;
+  --neon-purple-glow: rgba(124, 58, 237, 0.25);
+  --neon-magenta: #DB2777;
+  --neon-emerald: #059669;
+  --neon-emerald-glow: rgba(5, 150, 105, 0.25);
+  --neon-gold: #D97706;
+  --neon-gold-glow: rgba(217, 119, 6, 0.25);
+
+  /* Text Colors for White Background */
+  --text-white: #0F172A;
+  --text-primary: #1E293B;
+  --text-secondary: #64748B;
+  --text-muted: #94A3B8;
+  --text-dim: #CBD5E1;
+  --text-cyan: #0284C7;
+  --text-emerald: #059669;
+  --text-gold: #D97706;
+  --text-purple: #7C3AED;
+
+  /* Gradients */
+  --grad-balance: linear-gradient(135deg, #1E40AF 0%, #2563EB 50%, #00B8D9 100%);
+  --grad-mine-btn: linear-gradient(135deg, #00E599 0%, #00B4D8 100%);
+  --grad-upgrade-btn: linear-gradient(135deg, #8B5CF6 0%, #6366F1 50%, #A855F7 100%);
+  --grad-vip-banner: linear-gradient(135deg, #1E1B4B 0%, #311042 50%, #4C1D95 100%);
+  --grad-vip-btn: linear-gradient(135deg, #FFB800 0%, #FF8A00 100%);
+  --grad-card-border: linear-gradient(135deg, rgba(2, 132, 199, 0.2), rgba(124, 58, 237, 0.15), transparent);
+  --grad-rare-epic: linear-gradient(135deg, #EC4899 0%, #8B5CF6 100%);
+  --grad-legendary: linear-gradient(135deg, #F59E0B 0%, #EF4444 100%);
+
+  /* Borders & Outlines */
+  --border-subtle: 1px solid rgba(0, 0, 0, 0.08);
+  --border-card: 1px solid rgba(226, 232, 240, 0.9);
+  --border-active: 1px solid rgba(2, 132, 199, 0.4);
+  --border-purple: 1px solid rgba(124, 58, 237, 0.25);
+  --border-gold: 1px solid rgba(217, 119, 6, 0.3);
+
+  /* Shadows & Glows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.07);
+  --shadow-glow-cyan: 0 4px 16px rgba(2, 132, 199, 0.2);
+  --shadow-glow-emerald: 0 4px 16px rgba(5, 150, 105, 0.2);
+  --shadow-glow-purple: 0 4px 16px rgba(124, 58, 237, 0.2);
+  --shadow-glow-gold: 0 4px 16px rgba(217, 119, 6, 0.2);
+
+  /* Radius */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Typography */
+  --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Navigation Heights */
+  --header-height: 64px;
+  --bottom-nav-height: 72px;
+
+  /* Transitions */
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-bounce: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Dark Theme Selector */
+[data-theme="dark"] {
+  --bg-app: #060914;
+  --bg-primary: #080d1e;
+  --bg-secondary: #0d152f;
+  --bg-card: #101c3d;
+  --bg-card-hover: #162652;
+  --bg-card-glass: rgba(16, 28, 61, 0.78);
+  --bg-card-elevated: #172654;
+  --bg-input: #091024;
+  --bg-overlay: rgba(3, 6, 15, 0.85);
+  --header-bg: rgba(8, 13, 30, 0.85);
+  --nav-bg: rgba(8, 13, 30, 0.92);
+
+  --neon-cyan: #00F0FF;
+  --neon-cyan-glow: rgba(0, 240, 255, 0.35);
+  --neon-blue: #2A62FF;
+  --neon-blue-glow: rgba(42, 98, 255, 0.35);
+  --neon-purple: #9D4EDD;
+  --neon-purple-glow: rgba(157, 78, 221, 0.35);
+  --neon-magenta: #EC4899;
+  --neon-emerald: #00E599;
+  --neon-emerald-glow: rgba(0, 229, 153, 0.35);
+  --neon-gold: #FFB800;
+  --neon-gold-glow: rgba(255, 184, 0, 0.35);
+
+  --text-white: #FFFFFF;
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  --text-dim: #475569;
+  --text-cyan: #38BDF8;
+  --text-emerald: #34D399;
+  --text-gold: #FBBF24;
+  --text-purple: #C084FC;
+
+  --border-subtle: 1px solid rgba(255, 255, 255, 0.08);
+  --border-card: 1px solid rgba(56, 189, 248, 0.12);
+  --border-active: 1px solid rgba(0, 240, 255, 0.4);
+  --border-purple: 1px solid rgba(168, 85, 247, 0.3);
+  --border-gold: 1px solid rgba(255, 184, 0, 0.3);
+
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
