@@ -108,7 +108,7 @@ class DBService {
         ) VALUES (
           $1, $2, $3, $4,
           25.4867, 30.0000, 4.8200, 14.4630,
-          12.0000, 0.0000, 0.0500, $5,
+          12.0000, 0.0000, 0.0200, $5,
           $6, 'Standard Tier', 1.00, 'EQB...89xY (TON Space)', $7, false
         ) RETURNING *;
       `, [
@@ -121,7 +121,7 @@ class DBService {
         avatar
       ]);
 
-      // Initialize default active miner for this user
+      // Initialize default active miner for this user (Free Starter Miner: 0.02 USDT/day for 20 days)
       await db.query(`
         INSERT INTO active_miners (
           user_id, miner_id, name, level, rarity, status,
@@ -130,9 +130,9 @@ class DBService {
           next_level, next_level_reward, next_level_hashrate, image, cycle_start_time
         ) VALUES (
           $1, '1024', 'Cyber Bot #1024', 1, 'Common', 'Active',
-          1.0000, 0.0500, 0.0500, 0.0500, 1.5000,
-          30, 0, '100 MH/s', 0.5000,
-          2, 0.0750, '150 MH/s', '/assets/images/nft/miner-robot.png', $2
+          0.0000, 0.0200, 0.0000, 0.0000, 0.4000,
+          20, 0, '50 MH/s', 0.5000,
+          2, 0.0500, '100 MH/s', '/assets/images/nft/miner-robot.png', $2
         ) ON CONFLICT (user_id) DO NOTHING;
       `, [tgId, Date.now()]);
 
@@ -185,7 +185,7 @@ class DBService {
       totalEarned: parseFloat(row.total_earned || 0),
       totalWithdrawn: parseFloat(row.total_withdrawn || 0),
       totalDeposited: parseFloat(row.total_deposited || 0),
-      miningRate: parseFloat(row.mining_rate || 0.0500),
+      miningRate: parseFloat(row.mining_rate || 0.0200),
       referralCode: row.referral_code || 'CRYPTO-9482',
       referrerId: row.referrer_id,
       vipTier: row.vip_tier || 'Standard Tier',
@@ -324,7 +324,7 @@ class DBService {
         return this.formatMiner(res.rows[0]);
       }
 
-      // Default miner if not present
+      // Default miner if not present (Free Starter Miner: 0.02 USDT/day for 20 days)
       const newMiner = await db.query(`
         INSERT INTO active_miners (
           user_id, miner_id, name, level, rarity, status,
@@ -333,9 +333,9 @@ class DBService {
           next_level, next_level_reward, next_level_hashrate, image, cycle_start_time
         ) VALUES (
           $1, '1024', 'Cyber Bot #1024', 1, 'Common', 'Active',
-          1.0000, 0.0500, 0.0500, 0.0500, 1.5000,
-          30, 0, '100 MH/s', 0.5000,
-          2, 0.0750, '150 MH/s', '/assets/images/nft/miner-robot.png', $2
+          0.0000, 0.0200, 0.0000, 0.0000, 0.4000,
+          20, 0, '50 MH/s', 0.5000,
+          2, 0.0500, '100 MH/s', '/assets/images/nft/miner-robot.png', $2
         ) RETURNING *;
       `, [tgId, Date.now()]);
 
@@ -354,18 +354,18 @@ class DBService {
       level: parseInt(row.level || 1),
       rarity: row.rarity || 'Common',
       status: row.status || 'Active',
-      purchasePrice: parseFloat(row.purchase_price || 1.0),
-      dailyReward: parseFloat(row.daily_reward || 0.0500),
-      totalReward: parseFloat(row.total_reward || 0.0500),
-      totalClaim: parseFloat(row.total_claim || 0.0500),
-      maxReward: parseFloat(row.max_reward || 1.5000),
-      miningDays: parseInt(row.mining_days || 30),
+      purchasePrice: parseFloat(row.purchase_price || 0.0),
+      dailyReward: parseFloat(row.daily_reward !== null && row.daily_reward !== undefined ? row.daily_reward : 0.0200),
+      totalReward: parseFloat(row.total_reward !== null && row.total_reward !== undefined ? row.total_reward : 0.0000),
+      totalClaim: parseFloat(row.total_claim !== null && row.total_claim !== undefined ? row.total_claim : 0.0000),
+      maxReward: parseFloat(row.max_reward || 0.4000),
+      miningDays: parseInt(row.mining_days || 20),
       daysCompleted: parseInt(row.days_completed || 0),
-      powerHashrate: row.power_hashrate || '100 MH/s',
+      powerHashrate: row.power_hashrate || '50 MH/s',
       upgradeCost: parseFloat(row.upgrade_cost || 0.50),
       nextLevel: parseInt(row.next_level || 2),
-      nextLevelReward: parseFloat(row.next_level_reward || 0.0750),
-      nextLevelHashrate: row.next_level_hashrate || '150 MH/s',
+      nextLevelReward: parseFloat(row.next_level_reward || 0.0500),
+      nextLevelHashrate: row.next_level_hashrate || '100 MH/s',
       image: row.image || '/assets/images/nft/miner-robot.png',
       cycleStartTime: row.cycle_start_time ? parseInt(row.cycle_start_time) : Date.now()
     };

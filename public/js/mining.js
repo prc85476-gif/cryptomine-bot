@@ -108,7 +108,7 @@ const MiningModule = {
     const progressPct = isFull ? 100 : Math.min(100, ratio * 100);
 
     const state = window.appState ? window.appState.getState() : {};
-    const dailyReward = (state.activeMiner && state.activeMiner.dailyReward) ? Number(state.activeMiner.dailyReward) : 0.0500;
+    const dailyReward = (state.activeMiner && state.activeMiner.dailyReward) ? Number(state.activeMiner.dailyReward) : 0.0200;
 
     // 1. Progress Text & Bar Line (Fills up towards 24h with faster initial speed)
     const elapsedHours = Math.floor(elapsedMs / (3600 * 1000));
@@ -166,7 +166,7 @@ const MiningModule = {
     const remainingMs = Math.max(0, this.CYCLE_DURATION_MS - elapsedMs);
 
     const state = window.appState ? window.appState.getState() : {};
-    const dailyReward = (state.activeMiner && state.activeMiner.dailyReward) ? state.activeMiner.dailyReward : 0.0500;
+    const dailyReward = (state.activeMiner && state.activeMiner.dailyReward) ? state.activeMiner.dailyReward : 0.0200;
 
     // CASE 1: Cycle NOT FULL -> Show Small Top Popup Toast (English only, no big modal)
     if (!isFull) {

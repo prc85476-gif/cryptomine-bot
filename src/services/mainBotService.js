@@ -97,7 +97,8 @@ class MainBotService {
 ⛏️ <i>Mine USDT daily with next-gen AI Cyber Miners, build your hashpower, and withdraw directly to your BEP-20 wallet!</i>
 
 ✨ <b>Key Features:</b>
-• 🤖 <b>AI Robot Miners:</b> Earn daily USDT rewards
+• 🎁 <b>Free Starter Miner:</b> Free 0.02 USDT Daily for 20 Days!
+• 🤖 <b>AI Robot Miners:</b> Upgrade hashpower for higher returns
 • ⚡ <b>24h Mining Cycles:</b> Instant claims & auto-compound
 • 👥 <b>3-Tier Referral System:</b> Earn up to 10% commission
 • 💳 <b>Instant On-Chain Withdrawals:</b> Direct BEP-20 payouts

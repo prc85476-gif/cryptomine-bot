@@ -7,7 +7,7 @@ class StateStore {
       user: null,
       activeMiner: null,
       balance: 25.4867,
-      miningRate: 0.0500,
+      miningRate: 0.0200,
       streak: null,
       tasks: [],
       nfts: [],

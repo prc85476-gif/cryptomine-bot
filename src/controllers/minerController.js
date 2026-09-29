@@ -33,8 +33,8 @@ exports.getActiveMiner = async (req, res) => {
       data: {
         miner: {
           ...miner,
-          totalReward: miner.totalClaim || miner.totalReward || 0.0500,
-          totalClaim: miner.totalClaim || miner.totalReward || 0.0500
+          totalReward: (miner.totalClaim !== undefined && miner.totalClaim !== null) ? miner.totalClaim : (miner.totalReward ?? 0.0000),
+          totalClaim: (miner.totalClaim !== undefined && miner.totalClaim !== null) ? miner.totalClaim : (miner.totalReward ?? 0.0000)
         },
         userBalance: user.balance,
         depositBalance: user.depositBalance,

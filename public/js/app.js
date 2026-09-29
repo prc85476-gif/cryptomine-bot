@@ -340,7 +340,7 @@ const App = {
 
     if (elBal) elBal.textContent = Number(user.balance).toFixed(4);
     if (elNftBal) elNftBal.textContent = Number(user.depositBalance ?? user.nftBalance ?? 30.00).toFixed(2);
-    if (elRate) elRate.textContent = `+${Number(user.miningRate).toFixed(4)} USDT/hr`;
+    if (elRate) elRate.textContent = `+${Number(user.miningRate).toFixed(4)} USDT/d`;
     if (elUser) elUser.textContent = displayName;
     if (elProfName) elProfName.textContent = displayName;
     if (elProfUser) elProfUser.textContent = username;
@@ -368,7 +368,7 @@ const App = {
       elRarity.className = `badge badge-${miner.rarity.toLowerCase()}`;
     }
     if (elDaily) elDaily.textContent = `${Number(miner.dailyReward).toFixed(4)} USDT`;
-    if (elTotal) elTotal.textContent = `${Number(miner.totalClaim || miner.totalReward).toFixed(4)} USDT`;
+    if (elTotal) elTotal.textContent = `${Number(miner.totalClaim ?? miner.totalReward ?? 0).toFixed(4)} USDT`;
     if (elDays) elDays.textContent = `24 Hours`;
     if (elLevel) elLevel.textContent = `Level ${miner.level}`;
     if (elImg) elImg.src = miner.image;

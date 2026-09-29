@@ -18,7 +18,7 @@ async function initDatabase() {
         total_earned NUMERIC(18, 4) DEFAULT 14.4630,
         total_withdrawn NUMERIC(18, 4) DEFAULT 12.0000,
         total_deposited NUMERIC(18, 4) DEFAULT 0.0000,
-        mining_rate NUMERIC(18, 4) DEFAULT 0.0500,
+        mining_rate NUMERIC(18, 4) DEFAULT 0.0200,
         referral_code VARCHAR(50) UNIQUE,
         referrer_id BIGINT,
         vip_tier VARCHAR(50) DEFAULT 'Standard Tier',
@@ -36,7 +36,7 @@ async function initDatabase() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE;
     `);
 
-    // 2. Active Miners Table
+    // 2. Active Miners Table (Free Starter Miner: 0.02 USDT/day for 20 days)
     await db.query(`
       CREATE TABLE IF NOT EXISTS active_miners (
         id SERIAL PRIMARY KEY,
@@ -46,18 +46,18 @@ async function initDatabase() {
         level INT DEFAULT 1,
         rarity VARCHAR(50) DEFAULT 'Common',
         status VARCHAR(50) DEFAULT 'Active',
-        purchase_price NUMERIC(18, 4) DEFAULT 1.0000,
-        daily_reward NUMERIC(18, 4) DEFAULT 0.0500,
-        total_claim NUMERIC(18, 4) DEFAULT 0.0500,
-        total_reward NUMERIC(18, 4) DEFAULT 0.0500,
-        max_reward NUMERIC(18, 4) DEFAULT 1.5000,
-        mining_days INT DEFAULT 30,
+        purchase_price NUMERIC(18, 4) DEFAULT 0.0000,
+        daily_reward NUMERIC(18, 4) DEFAULT 0.0200,
+        total_claim NUMERIC(18, 4) DEFAULT 0.0000,
+        total_reward NUMERIC(18, 4) DEFAULT 0.0000,
+        max_reward NUMERIC(18, 4) DEFAULT 0.4000,
+        mining_days INT DEFAULT 20,
         days_completed INT DEFAULT 0,
-        power_hashrate VARCHAR(50) DEFAULT '100 MH/s',
+        power_hashrate VARCHAR(50) DEFAULT '50 MH/s',
         upgrade_cost NUMERIC(18, 4) DEFAULT 0.5000,
         next_level INT DEFAULT 2,
-        next_level_reward NUMERIC(18, 4) DEFAULT 0.0750,
-        next_level_hashrate VARCHAR(50) DEFAULT '150 MH/s',
+        next_level_reward NUMERIC(18, 4) DEFAULT 0.0500,
+        next_level_hashrate VARCHAR(50) DEFAULT '100 MH/s',
         image VARCHAR(500) DEFAULT '/assets/images/nft/miner-robot.png',
         cycle_start_time BIGINT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -128,7 +128,7 @@ async function initDatabase() {
         ) VALUES (
           9482103, 'cryptominer_pro', 'Alex', 'Miner',
           25.4867, 30.0000, 4.8200, 14.4630,
-          12.0000, 0.0000, 0.0500, 'CRYPTO-9482',
+          12.0000, 0.0000, 0.0200, 'CRYPTO-9482',
           'Standard Tier', 1.00, 'EQB...89xY (TON Space)', '/assets/images/nft/miner-robot.png', false
         );
       `);
@@ -139,7 +139,7 @@ async function initDatabase() {
       SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id), 1) FROM users));
     `);
 
-    // Seed Active Miner if not exists
+    // Seed Active Miner if not exists (Free Starter Miner: 0.02 USDT/day for 20 days)
     const minerCheck = await db.query('SELECT * FROM active_miners WHERE user_id = $1', [9482103]);
     if (minerCheck.rows.length === 0) {
       await db.query(`
@@ -150,9 +150,9 @@ async function initDatabase() {
           next_level, next_level_reward, next_level_hashrate, image, cycle_start_time
         ) VALUES (
           9482103, '1024', 'Cyber Bot #1024', 1, 'Common', 'Active',
-          1.0000, 0.0500, 0.0500, 0.0500, 1.5000,
-          30, 0, '100 MH/s', 0.5000,
-          2, 0.0750, '150 MH/s', '/assets/images/nft/miner-robot.png', $1
+          0.0000, 0.0200, 0.0000, 0.0000, 0.4000,
+          20, 0, '50 MH/s', 0.5000,
+          2, 0.0500, '100 MH/s', '/assets/images/nft/miner-robot.png', $1
         );
       `, [Date.now()]);
     }

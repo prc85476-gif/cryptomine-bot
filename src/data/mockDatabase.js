@@ -9,7 +9,7 @@ const mockDatabase = {
     depositBalance: 30.00, // Deposit / NFT Balance
     balance: 25.4867, // Total USDT Balance
     tonBalance: 4.82,
-    miningRate: 0.0500, // USDT per day base rate
+    miningRate: 0.0200, // USDT per day base rate (Free starter 0.02/day)
     totalEarned: 14.4630,
     totalWithdrawn: 12.0000,
     referralCode: "CRYPTO-9482",
@@ -29,19 +29,19 @@ const mockDatabase = {
     level: 1,
     rarity: "Common",
     status: "Active",
-    purchasePrice: 1.0,
-    dailyReward: 0.0500,
-    totalReward: 0.0500,
-    totalClaim: 0.0500,
-    maxReward: 1.5000,
-    miningDays: 30, // 30-day duration
+    purchasePrice: 0.0,
+    dailyReward: 0.0200,
+    totalReward: 0.0000,
+    totalClaim: 0.0000,
+    maxReward: 0.4000,
+    miningDays: 20, // 20-day duration
     cycleHours: 24,
     cycleStartTime: Date.now(),
-    powerHashrate: "100 MH/s",
+    powerHashrate: "50 MH/s",
     upgradeCost: 0.50,
     nextLevel: 2,
-    nextLevelReward: 0.0750,
-    nextLevelHashrate: "150 MH/s",
+    nextLevelReward: 0.0500,
+    nextLevelHashrate: "100 MH/s",
     image: "/assets/images/nft/miner-robot.png"
   },
 
@@ -49,19 +49,19 @@ const mockDatabase = {
     {
       id: "nft-1024",
       name: "Cyber Bot #1024",
-      description: "Entry-level AI miner for daily stable mining.",
+      description: "Free starter AI miner for daily stable mining.",
       rarity: "Common",
       rarityColor: "#8B5CF6",
-      price: 1.0,
+      price: 0.0,
       currency: "USDT",
-      dailyReward: 0.0500,
-      totalReward: 1.5000,
-      duration: 30,
-      hashrate: "100 MH/s",
-      roi: "150%",
-      badge: "Starter Miner",
+      dailyReward: 0.0200,
+      totalReward: 0.4000,
+      duration: 20,
+      hashrate: "50 MH/s",
+      roi: "Free Gift",
+      badge: "Free Starter",
       image: "/assets/images/nft/miner-robot.png",
-      stock: 1000,
+      stock: 10000,
       sold: 2450
     },
     {
