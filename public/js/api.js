@@ -3,6 +3,15 @@
  */
 const API_BASE = '/api';
 
+function safeHeader(val) {
+  if (!val) return '';
+  try {
+    return encodeURIComponent(String(val));
+  } catch (e) {
+    return '';
+  }
+}
+
 function getTelegramHeaders() {
   const headers = {
     'Content-Type': 'application/json'
@@ -10,11 +19,11 @@ function getTelegramHeaders() {
   try {
     const tgUser = window.TelegramService?.getUser ? window.TelegramService.getUser() : null;
     if (tgUser && tgUser.id) {
-      headers['x-telegram-user-id'] = tgUser.id;
-      if (tgUser.username) headers['x-telegram-username'] = tgUser.username;
-      if (tgUser.first_name) headers['x-telegram-first-name'] = tgUser.first_name;
-      if (tgUser.last_name) headers['x-telegram-last-name'] = tgUser.last_name;
-      if (tgUser.photo_url) headers['x-telegram-avatar'] = tgUser.photo_url;
+      headers['x-telegram-user-id'] = String(tgUser.id);
+      if (tgUser.username) headers['x-telegram-username'] = safeHeader(tgUser.username);
+      if (tgUser.first_name) headers['x-telegram-first-name'] = safeHeader(tgUser.first_name);
+      if (tgUser.last_name) headers['x-telegram-last-name'] = safeHeader(tgUser.last_name);
+      if (tgUser.photo_url) headers['x-telegram-avatar'] = safeHeader(tgUser.photo_url);
     }
   } catch (e) {}
   return headers;
