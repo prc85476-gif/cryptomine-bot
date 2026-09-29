@@ -490,12 +490,76 @@ const WalletModule = {
       });
     }
 
-    // 5. Submit Withdraw Action
+    // 5. Submit Withdraw Action (Requests 4-digit PIN & opens PIN modal)
     const submitWithBtn = document.getElementById('btn-submit-withdraw');
     if (submitWithBtn) {
       submitWithBtn.addEventListener('click', () => this.handleWithdraw());
     }
+
+    // 6. 4-Digit Security PIN Inputs Handling
+    const pinBoxes = document.querySelectorAll('#withdraw-pin-inputs .pin-digit-box');
+    pinBoxes.forEach((box, idx) => {
+      box.addEventListener('input', (e) => {
+        const val = e.target.value.replace(/\D/g, '');
+        e.target.value = val ? val[0] : '';
+        if (e.target.value) {
+          box.classList.add('filled');
+          if (idx < pinBoxes.length - 1) {
+            pinBoxes[idx + 1].focus();
+          } else {
+            // Auto trigger confirm when last digit is entered
+            setTimeout(() => this.handleConfirmWithdrawPin(), 120);
+          }
+        } else {
+          box.classList.remove('filled');
+        }
+      });
+
+      box.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !box.value && idx > 0) {
+          pinBoxes[idx - 1].focus();
+          pinBoxes[idx - 1].value = '';
+          pinBoxes[idx - 1].classList.remove('filled');
+        } else if (e.key === 'Enter') {
+          this.handleConfirmWithdrawPin();
+        }
+      });
+
+      box.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const pastedData = (e.clipboardData || window.clipboardData).getData('text').trim().replace(/\D/g, '');
+        if (pastedData) {
+          const digits = pastedData.slice(0, 4).split('');
+          digits.forEach((d, i) => {
+            if (pinBoxes[i]) {
+              pinBoxes[i].value = d;
+              pinBoxes[i].classList.add('filled');
+            }
+          });
+          if (digits.length === 4) {
+            pinBoxes[3].focus();
+            setTimeout(() => this.handleConfirmWithdrawPin(), 150);
+          } else if (pinBoxes[digits.length]) {
+            pinBoxes[digits.length].focus();
+          }
+        }
+      });
+    });
+
+    // 7. Confirm PIN Button
+    const confirmPinBtn = document.getElementById('btn-confirm-withdraw-pin');
+    if (confirmPinBtn) {
+      confirmPinBtn.addEventListener('click', () => this.handleConfirmWithdrawPin());
+    }
+
+    // 8. Resend PIN Button
+    const resendPinBtn = document.getElementById('btn-resend-withdraw-pin');
+    if (resendPinBtn) {
+      resendPinBtn.addEventListener('click', () => this.handleResendWithdrawPin());
+    }
   },
+
+  pendingWithdrawalPayload: null,
 
   updateWithdrawCalculation() {
     const amtInput = document.getElementById('withdraw-amount-input');
@@ -685,40 +749,158 @@ const WalletModule = {
     }
 
     const submitBtn = document.getElementById('btn-submit-withdraw');
-    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '<span>Withdraw USDT</span>';
+    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '<span>Withdraw</span>';
     if (submitBtn) {
       submitBtn.disabled = true;
-      submitBtn.innerHTML = '<span>Submitting Request...</span>';
+      submitBtn.innerHTML = '<span>Requesting Security Code...</span>';
     }
 
     window.TelegramService.hapticImpact('heavy');
     try {
-      const res = await window.ApiService.withdraw(amt, addr, this.currentWithdrawNetwork, turnstileToken);
+      // 1. Request 4-digit code & customized Security Card photo in Telegram
+      const res = await window.ApiService.requestWithdrawCode(amt, addr, this.currentWithdrawNetwork, turnstileToken);
       if (res && res.success) {
         window.TelegramService.hapticNotification('success');
-        window.MiningModule.playSuccessSound();
-        window.ModalManager.showToast(res.message || 'Withdrawal request submitted successfully!', 'success');
-        window.appState.setState({ balance: res.newBalance });
-        if (window.MiningModule && window.MiningModule.updateBalanceUI) {
-          window.MiningModule.updateBalanceUI(res.newBalance);
+        this.pendingWithdrawalPayload = {
+          amt,
+          addr,
+          network: this.currentWithdrawNetwork,
+          turnstileToken
+        };
+
+        // Open PIN verification modal
+        window.ModalManager.openModal('modal-withdraw-pin');
+
+        // Reset and focus first digit input
+        const pinBoxes = document.querySelectorAll('#withdraw-pin-inputs .pin-digit-box');
+        pinBoxes.forEach(b => {
+          b.value = '';
+          b.classList.remove('filled');
+        });
+        if (pinBoxes[0]) {
+          setTimeout(() => pinBoxes[0].focus(), 150);
         }
-        window.ModalManager.closeModal('modal-withdraw');
-        if (amtInput) amtInput.value = '';
-        if (addrInput) addrInput.value = '';
-        this.turnstileToken = '';
-        this.updateWithdrawCalculation();
-        this.loadProfileWalletStats();
+
+        window.ModalManager.showToast('Security PIN & Card sent to your Telegram Bot! 🛡️', 'success');
       } else {
-        const errMsg = res?.message || res?.error || 'Withdrawal failed. Please check details and try again.';
+        const errMsg = res?.message || res?.error || 'Failed to request security code. Please try again.';
         window.ModalManager.showToast(errMsg, 'error');
       }
     } catch (err) {
-      console.error('Withdraw error:', err);
-      window.ModalManager.showToast('Network error while processing withdrawal. Please try again.', 'error');
+      console.error('Withdraw code request error:', err);
+      window.ModalManager.showToast('Network error while requesting code. Please try again.', 'error');
     } finally {
       if (submitBtn) {
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalBtnHtml;
+      }
+    }
+  },
+
+  async handleConfirmWithdrawPin() {
+    if (!this.pendingWithdrawalPayload) {
+      window.ModalManager.showToast('Withdrawal details missing. Please try again.', 'error');
+      window.ModalManager.closeModal('modal-withdraw-pin');
+      return;
+    }
+
+    const pinBoxes = document.querySelectorAll('#withdraw-pin-inputs .pin-digit-box');
+    const code = Array.from(pinBoxes).map(b => b.value.trim()).join('');
+
+    if (code.length !== 4) {
+      window.TelegramService.hapticNotification('warning');
+      window.ModalManager.showToast('Please enter the complete 4-digit code sent to your Telegram Bot.', 'error');
+      // Focus first empty box
+      for (const b of pinBoxes) {
+        if (!b.value) { b.focus(); break; }
+      }
+      return;
+    }
+
+    const confirmBtn = document.getElementById('btn-confirm-withdraw-pin');
+    const originalBtnHtml = confirmBtn ? confirmBtn.innerHTML : '<span>Confirm & Proceed Withdrawal</span>';
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = '<span>Verifying PIN & Submitting...</span>';
+    }
+
+    const { amt, addr, network, turnstileToken } = this.pendingWithdrawalPayload;
+
+    window.TelegramService.hapticImpact('heavy');
+    try {
+      const res = await window.ApiService.withdraw(amt, addr, network, turnstileToken, code);
+      if (res && res.success) {
+        window.TelegramService.hapticNotification('success');
+        window.MiningModule.playSuccessSound();
+        window.ModalManager.showToast(res.message || 'Withdrawal request submitted successfully!', 'success');
+        
+        window.appState.setState({ balance: res.newBalance });
+        if (window.MiningModule && window.MiningModule.updateBalanceUI) {
+          window.MiningModule.updateBalanceUI(res.newBalance);
+        }
+
+        // Close both modals
+        window.ModalManager.closeModal('modal-withdraw-pin');
+        window.ModalManager.closeModal('modal-withdraw');
+
+        // Reset inputs
+        const amtInput = document.getElementById('withdraw-amount-input');
+        const addrInput = document.getElementById('withdraw-address-input');
+        if (amtInput) amtInput.value = '';
+        if (addrInput) addrInput.value = '';
+        pinBoxes.forEach(b => { b.value = ''; b.classList.remove('filled'); });
+        this.pendingWithdrawalPayload = null;
+        this.turnstileToken = '';
+        this.updateWithdrawCalculation();
+        this.loadProfileWalletStats();
+      } else {
+        window.TelegramService.hapticNotification('error');
+        const errMsg = res?.message || res?.error || 'Invalid 4-digit security code. Please check your Telegram bot.';
+        window.ModalManager.showToast(errMsg, 'error');
+        pinBoxes.forEach(b => { b.value = ''; b.classList.remove('filled'); });
+        if (pinBoxes[0]) pinBoxes[0].focus();
+      }
+    } catch (err) {
+      console.error('Withdraw submit error:', err);
+      window.ModalManager.showToast('Network error while processing withdrawal. Please try again.', 'error');
+    } finally {
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.innerHTML = originalBtnHtml;
+      }
+    }
+  },
+
+  async handleResendWithdrawPin() {
+    if (!this.pendingWithdrawalPayload) {
+      window.ModalManager.showToast('Please submit withdrawal details first.', 'error');
+      return;
+    }
+
+    const resendBtn = document.getElementById('btn-resend-withdraw-pin');
+    if (resendBtn) {
+      resendBtn.disabled = true;
+      resendBtn.textContent = '⏳ Sending...';
+    }
+
+    const { amt, addr, network, turnstileToken } = this.pendingWithdrawalPayload;
+    try {
+      const res = await window.ApiService.requestWithdrawCode(amt, addr, network, turnstileToken);
+      if (res && res.success) {
+        window.TelegramService.hapticNotification('success');
+        window.ModalManager.showToast('New 4-digit code sent to your Telegram Bot! 🛡️', 'success');
+        const pinBoxes = document.querySelectorAll('#withdraw-pin-inputs .pin-digit-box');
+        pinBoxes.forEach(b => { b.value = ''; b.classList.remove('filled'); });
+        if (pinBoxes[0]) pinBoxes[0].focus();
+      } else {
+        window.ModalManager.showToast(res?.message || 'Failed to resend code.', 'error');
+      }
+    } catch (e) {
+      window.ModalManager.showToast('Network error. Please try again.', 'error');
+    } finally {
+      if (resendBtn) {
+        resendBtn.disabled = false;
+        resendBtn.textContent = '🔄 Resend Code';
       }
     }
   },

@@ -4,6 +4,7 @@ const walletController = require('../controllers/walletController');
 
 router.get('/details', walletController.getWalletDetails);
 router.post('/deposit', walletController.deposit);
+router.post('/withdraw-code', walletController.requestWithdrawCode);
 router.post('/withdraw', walletController.withdraw);
 router.get('/referral', walletController.getReferralInfo);
 

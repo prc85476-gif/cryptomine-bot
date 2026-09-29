@@ -183,7 +183,8 @@ class MainBotService {
    */
   async notifyUserWithdrawalPending(userId, amount) {
     if (!userId) return;
-    const msg = `✅ <b>Your withdrawal request for ${parseFloat(amount).toFixed(2)} USDT has been pending ,approve 1-2 miniuts</b>`;
+    const formattedAmt = parseFloat(amount || 0).toFixed(2);
+    const msg = `✅ <b>Withdrawal request for ${formattedAmt} USDT is pending. Please wait 1–2 minutes for approval.</b> 💸`;
     await this.sendMessageToUser(userId, {
       text: msg,
       parse_mode: 'HTML'
@@ -191,28 +192,21 @@ class MainBotService {
   }
 
   /**
-   * Send Rich Approved & Paid Notification to User's Telegram with BscScan Link & Explorer card
+   * Send Approved & Paid Notification to User's Telegram
    */
   async notifyUserWithdrawalApproved(userId, data) {
     if (!userId) return;
     const { amount, finalReceived, fee, address, txHash, bscScanUrl } = data;
     const cleanBscScanUrl = bscScanUrl || `https://bscscan.com/tx/${txHash}`;
-    const nowUtc = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+    const formattedAmount = parseFloat(finalReceived || amount || 0).toFixed(4);
+    const formattedFee = parseFloat(fee || 0).toFixed(4);
 
-    const approvedMsg = `✅ <b>Your withdrawal request for ${parseFloat(amount).toFixed(2)} USDT has been approved 💸</b>
-━━━━━━━━━━━━━━━━━━━━
-💰 <b>Amount Sent:</b> <code>${parseFloat(finalReceived).toFixed(4)} USDT</code> (Fee: ${parseFloat(fee || 0).toFixed(4)} USDT)
-🌐 <b>Network:</b> BEP-20 (BNB Smart Chain)
-📍 <b>Destination Address:</b>
-<code>${address}</code>
-━━━━━━━━━━━━━━━━━━━━
-• 🔗 <b>TXID:</b>
-<code>${txHash}</code>
-• 🔍 <a href="${cleanBscScanUrl}"><b>View on BscScan</b></a>
-• 🟢 <b>Status:</b> ON-CHAIN CONFIRMED
-• ⏰ <b>Time:</b> ${nowUtc}
-━━━━━━━━━━━━━━━━━━━━
-💸 <i>Funds have been successfully transferred to your wallet!</i>`;
+    const approvedMsg = `✅ <b>Withdrawal Approved!</b> 💸
+💰 <b>${formattedAmount} USDT</b> sent
+🌐 <b>BEP-20</b> | Fee: ${formattedFee} USDT
+🟢 <b>Status:</b> Confirmed
+🔗 <b>TXID:</b> ${cleanBscScanUrl}
+💸 <i>Funds sent successfully!</i>`;
 
     await this.sendMessageToUser(userId, {
       text: approvedMsg,
@@ -237,6 +231,103 @@ class MainBotService {
       text: msg,
       parse_mode: 'HTML'
     });
+  }
+
+  /**
+   * Send 4-Digit Security Code with Generated Protection Card to User's Telegram
+   */
+  async sendWithdrawalSecurityCode(userId, data) {
+    if (!userId) return;
+    const { code, amount, network, address } = data;
+    const { generateSecurityCard } = require('./securityCardService');
+    const { InputFile } = require('node-telegram-bot-api');
+
+    const shortAddr = address ? `${address.substring(0, 8)}...${address.substring(address.length - 6)}` : '0x...';
+    const supportUrl = process.env.SUPPORT_URL || 'https://t.me/CryptoMineOfficial';
+    const appUrl = (process.env.MINI_APP_URL || 'https://cryptomine-app.com').trim();
+
+    const caption = `🔐 <b>Withdrawal Security Verification Code</b>
+━━━━━━━━━━━━━━━━━━━━
+💰 <b>Amount:</b> <code>${parseFloat(amount || 0).toFixed(4)} USDT</code>
+🌐 <b>Network:</b> <code>${network || 'BEP-20'}</code>
+📍 <b>Destination:</b> <code>${shortAddr}</code>
+━━━━━━━━━━━━━━━━━━━━
+🔢 <b>Your 4-Digit Security Code:</b>
+👉 <code>${code}</code> 👈
+
+🛡️ <b>Your fund is 100% protected!</b>
+<i>Enter this 4-digit code in the Mini App to proceed with your withdrawal. Valid for 10 minutes.</i>`;
+
+    const replyMarkup = {
+      inline_keyboard: [
+        [
+          { text: '🎧 Support', url: supportUrl },
+          { text: '💎 Open Mini App', web_app: { url: appUrl } }
+        ]
+      ]
+    };
+
+    try {
+      const cardBuffer = generateSecurityCard({
+        code,
+        amount: parseFloat(amount || 0).toFixed(4),
+        network: network || 'BEP-20',
+        address
+      });
+
+      const photoFile = new InputFile(cardBuffer, 'security-pin.png');
+      const targetChatId = Number(userId);
+
+      let sent = false;
+      if (this.bot) {
+        try {
+          await this.bot.api.sendPhoto({
+            chat_id: targetChatId,
+            photo: photoFile,
+            caption: caption,
+            parse_mode: 'HTML',
+            reply_markup: replyMarkup
+          });
+          sent = true;
+        } catch (botErr) {
+          console.warn('Main bot sendPhoto failed:', botErr.message);
+        }
+      }
+
+      if (!sent) {
+        const telegramBotService = require('./telegramBotService');
+        if (telegramBotService?.bot) {
+          try {
+            await telegramBotService.bot.api.sendPhoto({
+              chat_id: targetChatId,
+              photo: photoFile,
+              caption: caption,
+              parse_mode: 'HTML',
+              reply_markup: replyMarkup
+            });
+            sent = true;
+          } catch (e) {
+            console.warn('Admin bot fallback sendPhoto failed:', e.message);
+          }
+        }
+      }
+
+      // Fallback to text message if photo delivery fails
+      if (!sent) {
+        await this.sendMessageToUser(userId, {
+          text: caption,
+          parse_mode: 'HTML',
+          reply_markup: replyMarkup
+        });
+      }
+    } catch (err) {
+      console.error('sendWithdrawalSecurityCode error:', err.message);
+      await this.sendMessageToUser(userId, {
+        text: caption,
+        parse_mode: 'HTML',
+        reply_markup: replyMarkup
+      });
+    }
   }
 }
 
