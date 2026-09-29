@@ -402,12 +402,16 @@ const WalletModule = {
       } else {
         // Deterministic fallback if offline
         const user = window.TelegramService?.getUser ? window.TelegramService.getUser() : null;
-        const tgIdStr = String(user?.id || '489').slice(-3).padStart(3, '5');
-        this.currentExactAmount = (amountNum + parseFloat('0.0' + tgIdStr)).toFixed(4);
+        const idStr = String(user?.id || '42').replace(/\D/g, '') || '42';
+        const last2 = idStr.slice(-2).padStart(2, '42');
+        this.currentExactAmount = `${Math.floor(amountNum)}.00${last2}`;
       }
     } catch (e) {
       console.warn('createDepositIntent error:', e);
-      this.currentExactAmount = (amountNum + 0.0148).toFixed(4);
+      const user = window.TelegramService?.getUser ? window.TelegramService.getUser() : null;
+      const idStr = String(user?.id || '42').replace(/\D/g, '') || '42';
+      const last2 = idStr.slice(-2).padStart(2, '42');
+      this.currentExactAmount = `${Math.floor(amountNum)}.00${last2}`;
     } finally {
       if (proceedTopupBtn) {
         proceedTopupBtn.disabled = false;
@@ -417,14 +421,12 @@ const WalletModule = {
 
     // Populate data
     const payAmtEl = document.getElementById('pay-detail-amount');
-    const payBalEl = document.getElementById('pay-detail-balance');
     const payNetNameEl = document.getElementById('pay-detail-network-name');
     const payIconWrapEl = document.getElementById('pay-detail-icon-wrap');
     const addrEl = document.getElementById('deposit-crypto-address');
     const qrImgEl = document.getElementById('deposit-qr-image');
 
     if (payAmtEl) payAmtEl.textContent = `${this.currentExactAmount} USDT`;
-    if (payBalEl) payBalEl.textContent = `${amountNum.toFixed(2)} USDT`;
     if (payNetNameEl) payNetNameEl.textContent = this.currentDepositNetwork || 'USDT BEP20';
     if (addrEl) addrEl.textContent = this.depositAddress || '0x91AbcbAbE89945De4e491bf8850Bae836dB66547';
 

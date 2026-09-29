@@ -50,21 +50,29 @@ class DepositWatcherService {
 
   /**
    * Calculate deterministic unique decimal amount for a user based on Telegram ID or User ID
-   * E.g. base = 3, tgId = 5829148 -> exactAmount = "3.0148"
+   * Formatted with double zeros: e.g. 1.0042 or 3.0042 (base.00 + 2-3 digits of TG UID)
    */
   calculateExactAmount(baseAmount, userId, telegramId) {
-    const numAmt = parseFloat(baseAmount) || 3.0;
-    const idStr = String(telegramId || userId || '789').replace(/\D/g, '') || '489';
-    const last3 = idStr.slice(-3).padStart(3, '5');
-    const suffix = last3 === '000' ? '101' : last3;
+    const numAmt = parseFloat(baseAmount) || 1.0;
+    const baseInt = Math.floor(numAmt);
+    const idStr = String(telegramId || userId || '789').replace(/\D/g, '') || '42';
+    // Extract last 2 or 3 digits of Telegram UID (e.g. '42' or '942')
+    let uidDigits = idStr.slice(-2);
+    if (uidDigits === '00' || uidDigits.length < 2) {
+      uidDigits = idStr.slice(-3);
+      if (uidDigits === '000' || uidDigits.length < 2) {
+        uidDigits = '24';
+      }
+    }
     
-    let exact = (numAmt + parseFloat('0.0' + suffix)).toFixed(4);
+    // Format as base.00 + uidDigits -> e.g. 1.0042 or 3.0042
+    let exact = `${baseInt}.00${uidDigits}`;
     
     // Handle collision if another active intent exists with same exact amount
     let counter = 1;
     while (this.activeIntents.has(exact) && this.activeIntents.get(exact).userId !== String(userId)) {
-      const adjusted = parseFloat(exact) + counter * 0.0001;
-      exact = adjusted.toFixed(4);
+      const nextSuffix = (parseInt(uidDigits, 10) + counter).toString().padStart(2, '0');
+      exact = `${baseInt}.00${nextSuffix}`;
       counter++;
     }
     return exact;
@@ -205,11 +213,15 @@ class DepositWatcherService {
         if (this.processedTxHashes.has(txHash)) continue;
 
         const rawValue = ethers.formatUnits(ev.args.value, 18);
-        const valueFormatted = parseFloat(rawValue).toFixed(4);
-        const valueNum = parseFloat(valueFormatted);
+        const valueNum = parseFloat(rawValue);
+        const valueFormatted = valueNum.toFixed(4);
+        const valueFormatted5 = valueNum.toFixed(5);
+        const valueRawStr = String(valueNum);
         
-        // 1. Direct match by exactAmount string
-        let matchingIntent = this.activeIntents.get(valueFormatted);
+        // 1. Direct match by exactAmount string (4 or 5 decimals or raw float string)
+        let matchingIntent = this.activeIntents.get(valueFormatted) || 
+                             this.activeIntents.get(valueFormatted5) || 
+                             this.activeIntents.get(valueRawStr);
 
         // 2. Fallback: Flexible match if user sent exactAmount with slight float variance or baseAmount
         if (!matchingIntent) {
