@@ -49,6 +49,33 @@ const TelegramService = {
 
   getUser() {
     return this.tg?.initDataUnsafe?.user || null;
+  },
+
+  getStartParam() {
+    let param = this.tg?.initDataUnsafe?.start_param || null;
+    if (!param && window.location.search) {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        param = urlParams.get('tgWebAppStartParam') || urlParams.get('start_param') || urlParams.get('startapp') || urlParams.get('start') || urlParams.get('ref');
+      } catch (e) {}
+    }
+    if (!param && window.location.hash) {
+      try {
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        param = hashParams.get('tgWebAppStartParam') || hashParams.get('start_param') || hashParams.get('startapp');
+      } catch (e) {}
+    }
+    if (param) {
+      try {
+        localStorage.setItem('cryptomine_referrer_param', String(param).trim());
+      } catch (e) {}
+      return String(param).trim();
+    }
+    try {
+      return localStorage.getItem('cryptomine_referrer_param') || null;
+    } catch (e) {
+      return null;
+    }
   }
 };
 

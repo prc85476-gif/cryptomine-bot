@@ -2,14 +2,81 @@ const db = require('../config/db');
 
 class DBService {
   /**
+   * Helper to lookup referrer ID by referral code, tgId, or startParam
+   */
+  async findReferrerIdByCode(code) {
+    if (!code) return null;
+    const cleanStr = String(code).trim();
+    if (!cleanStr) return null;
+
+    const numericPart = parseInt(cleanStr.replace(/\D/g, ''), 10) || 0;
+    const directNum = isNaN(cleanStr) ? 0 : Number(cleanStr);
+
+    try {
+      const res = await db.query(`
+        SELECT telegram_id FROM users
+        WHERE UPPER(referral_code) = UPPER($1)
+           OR UPPER(referral_code) = UPPER($2)
+           OR UPPER(referral_code) = UPPER($3)
+           OR telegram_id = $4
+           OR telegram_id = $5
+        LIMIT 1;
+      `, [
+        cleanStr,
+        `REF-${cleanStr.replace(/^(REF|ref)-/i, '')}`,
+        `CRYPTO-${cleanStr.replace(/^(CRYPTO|crypto)-/i, '')}`,
+        directNum,
+        numericPart
+      ]);
+
+      if (res.rows.length > 0) {
+        return res.rows[0].telegram_id;
+      }
+    } catch (err) {
+      console.warn('findReferrerIdByCode warning:', err.message);
+    }
+    return null;
+  }
+
+  /**
    * Get or create a user by Telegram ID
    */
   async getUser(telegramId = 9482103, meta = {}) {
     try {
       const tgId = Number(telegramId) || 9482103;
       const res = await db.query('SELECT * FROM users WHERE telegram_id = $1', [tgId]);
+
+      // Resolve effective referrer if provided via direct ID or startParam/code
+      let effectiveReferrerId = meta.referrerId ? Number(meta.referrerId) : null;
+      if (!effectiveReferrerId && (meta.startParam || meta.referralCode)) {
+        effectiveReferrerId = await this.findReferrerIdByCode(meta.startParam || meta.referralCode);
+      }
+      if (effectiveReferrerId && Number(effectiveReferrerId) === tgId) {
+        effectiveReferrerId = null; // Cannot refer oneself
+      }
       
       if (res.rows.length > 0) {
+        // If user already exists in DB but doesn't have a referrer_id linked yet
+        if (!res.rows[0].referrer_id && effectiveReferrerId) {
+          await db.query('UPDATE users SET referrer_id = $1 WHERE telegram_id = $2', [effectiveReferrerId, tgId]);
+          res.rows[0].referrer_id = effectiveReferrerId;
+
+          await this.addReferral(effectiveReferrerId, {
+            referredId: tgId,
+            username: res.rows[0].username,
+            firstName: res.rows[0].first_name,
+            level: 1,
+            commissionEarned: 0.00
+          });
+
+          try {
+            const mainBotService = require('./mainBotService');
+            if (mainBotService?.notifyReferrerNewUser) {
+              mainBotService.notifyReferrerNewUser(effectiveReferrerId, res.rows[0].username, res.rows[0].first_name);
+            }
+          } catch (e) {}
+        }
+
         // Optionally update profile details if new metadata provided
         if (meta.username || meta.firstName || meta.lastName || meta.avatar) {
           const updates = {};
@@ -50,7 +117,7 @@ class DBService {
         firstName,
         lastName,
         referralCode,
-        meta.referrerId || null,
+        effectiveReferrerId || null,
         avatar
       ]);
 
@@ -78,15 +145,22 @@ class DBService {
         ) ON CONFLICT (user_id) DO NOTHING;
       `, [tgId]);
 
-      // If registered with referrer, record referral link
-      if (meta.referrerId && meta.referrerId !== tgId) {
-        await this.addReferral(meta.referrerId, {
+      // If registered with referrer, record referral link and notify referrer
+      if (effectiveReferrerId && effectiveReferrerId !== tgId) {
+        await this.addReferral(effectiveReferrerId, {
           referredId: tgId,
           username,
           firstName,
           level: 1,
-          commissionEarned: 0.50
+          commissionEarned: 0.00
         });
+
+        try {
+          const mainBotService = require('./mainBotService');
+          if (mainBotService?.notifyReferrerNewUser) {
+            mainBotService.notifyReferrerNewUser(effectiveReferrerId, username, firstName);
+          }
+        } catch (e) {}
       }
 
       return this.formatUser(newUser.rows[0]);
@@ -480,32 +554,65 @@ class DBService {
   }
 
   /**
-   * Get Referrals stats and list from Neon Database
+   * Get Referrals stats and list from Neon Database (Real-time sync)
    */
   async getReferrals(userId = 9482103) {
     try {
       const tgId = Number(userId) || 9482103;
+
+      // 1. Fetch from referrals table
       const res = await db.query(`
         SELECT * FROM referrals
         WHERE referrer_id = $1
         ORDER BY created_at DESC;
       `, [tgId]);
 
-      const list = res.rows.map(r => ({
-        id: r.referred_id,
-        name: r.first_name || r.username || `User #${r.referred_id}`,
-        username: r.username || `user_${r.referred_id}`,
-        level: `Tier ${r.level}`,
-        earned: `${parseFloat(r.commission_earned || 0).toFixed(2)} USDT`,
-        commission: `+${parseFloat(r.commission_earned || 0).toFixed(2)} USDT`,
-        date: new Date(r.created_at).toLocaleDateString(),
-        active: true
-      }));
+      // 2. Also check if there are users in users table with referrer_id = $1 not yet in referrals
+      const uRes = await db.query(`
+        SELECT telegram_id, username, first_name, created_at
+        FROM users
+        WHERE referrer_id = $1;
+      `, [tgId]);
 
-      const totalCommission = res.rows.reduce((sum, r) => sum + parseFloat(r.commission_earned || 0), 0);
+      const map = new Map();
+
+      // Add users from referrals table
+      res.rows.forEach(r => {
+        map.set(String(r.referred_id), {
+          id: r.referred_id,
+          name: r.first_name || r.username || `User #${r.referred_id}`,
+          username: r.username || `user_${r.referred_id}`,
+          level: `Tier ${r.level || 1}`,
+          earned: `${parseFloat(r.commission_earned || 0).toFixed(2)} USDT`,
+          commission: `+${parseFloat(r.commission_earned || 0).toFixed(2)} USDT`,
+          rawCommission: parseFloat(r.commission_earned || 0),
+          date: new Date(r.created_at).toLocaleDateString(),
+          active: true
+        });
+      });
+
+      // Add any missing users from users table
+      uRes.rows.forEach(u => {
+        if (!map.has(String(u.telegram_id))) {
+          map.set(String(u.telegram_id), {
+            id: u.telegram_id,
+            name: u.first_name || u.username || `User #${u.telegram_id}`,
+            username: u.username || `user_${u.telegram_id}`,
+            level: 'Tier 1',
+            earned: '0.00 USDT',
+            commission: '+0.00 USDT',
+            rawCommission: 0.00,
+            date: new Date(u.created_at).toLocaleDateString(),
+            active: true
+          });
+        }
+      });
+
+      const list = Array.from(map.values());
+      const totalCommission = list.reduce((sum, r) => sum + r.rawCommission, 0);
 
       return {
-        invitedCount: res.rows.length,
+        invitedCount: list.length,
         totalEarnings: parseFloat(totalCommission.toFixed(4)),
         referralsList: list
       };
@@ -540,6 +647,149 @@ class DBService {
     } catch (err) {
       console.error('DBService.addReferral Error:', err);
       return null;
+    }
+  }
+
+  /**
+   * Distribute 3-Tier Referral Commissions (Tier 1: 10%, Tier 2: 5%, Tier 3: 2%)
+   */
+  async distributeReferralCommission(userId, sourceAmount, sourceAction = 'Activity') {
+    try {
+      const amt = parseFloat(sourceAmount);
+      if (!amt || isNaN(amt) || amt <= 0) return;
+
+      // 1. Get user and their direct referrer (Tier 1)
+      const uRes = await db.query('SELECT telegram_id, username, first_name, referrer_id FROM users WHERE telegram_id = $1', [Number(userId)]);
+      if (uRes.rows.length === 0 || !uRes.rows[0].referrer_id) return;
+
+      const actor = uRes.rows[0];
+      const tier1Id = actor.referrer_id;
+
+      // Tier 1 Commission (10%)
+      const comm1 = parseFloat((amt * 0.10).toFixed(4));
+      if (comm1 > 0 && tier1Id) {
+        await db.query(`
+          UPDATE users 
+          SET balance = balance + $1, total_earned = total_earned + $1 
+          WHERE telegram_id = $2;
+        `, [comm1, tier1Id]);
+
+        await this.addReferral(tier1Id, {
+          referredId: actor.telegram_id,
+          username: actor.username,
+          firstName: actor.first_name,
+          level: 1,
+          commissionEarned: comm1
+        });
+
+        await this.addTransaction({
+          id: `tx-ref1-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+          userId: tier1Id,
+          type: `Referral Commission (Tier 1 - ${sourceAction})`,
+          amount: `+${comm1.toFixed(4)} USDT`,
+          txHash: `ref_t1_${actor.telegram_id}_${Date.now()}`,
+          recipientAddress: actor.username ? `@${actor.username}` : `User #${actor.telegram_id}`,
+          network: 'CryptoMine Network',
+          status: 'Completed',
+          positive: true,
+          date: 'Just now'
+        });
+
+        try {
+          const mainBotService = require('./mainBotService');
+          if (mainBotService?.notifyReferrerCommission) {
+            mainBotService.notifyReferrerCommission(tier1Id, comm1, 1, sourceAction);
+          }
+        } catch (e) {}
+
+        // 2. Check Tier 2 Referrer (5%)
+        const t1Res = await db.query('SELECT referrer_id FROM users WHERE telegram_id = $1', [tier1Id]);
+        const tier2Id = t1Res.rows[0]?.referrer_id;
+
+        if (tier2Id && tier2Id !== actor.telegram_id) {
+          const comm2 = parseFloat((amt * 0.05).toFixed(4));
+          if (comm2 > 0) {
+            await db.query(`
+              UPDATE users 
+              SET balance = balance + $1, total_earned = total_earned + $1 
+              WHERE telegram_id = $2;
+            `, [comm2, tier2Id]);
+
+            await this.addReferral(tier2Id, {
+              referredId: actor.telegram_id,
+              username: actor.username,
+              firstName: actor.first_name,
+              level: 2,
+              commissionEarned: comm2
+            });
+
+            await this.addTransaction({
+              id: `tx-ref2-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+              userId: tier2Id,
+              type: `Referral Commission (Tier 2 - ${sourceAction})`,
+              amount: `+${comm2.toFixed(4)} USDT`,
+              txHash: `ref_t2_${actor.telegram_id}_${Date.now()}`,
+              recipientAddress: actor.username ? `@${actor.username}` : `User #${actor.telegram_id}`,
+              network: 'CryptoMine Network',
+              status: 'Completed',
+              positive: true,
+              date: 'Just now'
+            });
+
+            try {
+              const mainBotService = require('./mainBotService');
+              if (mainBotService?.notifyReferrerCommission) {
+                mainBotService.notifyReferrerCommission(tier2Id, comm2, 2, sourceAction);
+              }
+            } catch (e) {}
+
+            // 3. Check Tier 3 Referrer (2%)
+            const t2Res = await db.query('SELECT referrer_id FROM users WHERE telegram_id = $1', [tier2Id]);
+            const tier3Id = t2Res.rows[0]?.referrer_id;
+
+            if (tier3Id && tier3Id !== actor.telegram_id && tier3Id !== tier1Id) {
+              const comm3 = parseFloat((amt * 0.02).toFixed(4));
+              if (comm3 > 0) {
+                await db.query(`
+                  UPDATE users 
+                  SET balance = balance + $1, total_earned = total_earned + $1 
+                  WHERE telegram_id = $2;
+                `, [comm3, tier3Id]);
+
+                await this.addReferral(tier3Id, {
+                  referredId: actor.telegram_id,
+                  username: actor.username,
+                  firstName: actor.first_name,
+                  level: 3,
+                  commissionEarned: comm3
+                });
+
+                await this.addTransaction({
+                  id: `tx-ref3-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+                  userId: tier3Id,
+                  type: `Referral Commission (Tier 3 - ${sourceAction})`,
+                  amount: `+${comm3.toFixed(4)} USDT`,
+                  txHash: `ref_t3_${actor.telegram_id}_${Date.now()}`,
+                  recipientAddress: actor.username ? `@${actor.username}` : `User #${actor.telegram_id}`,
+                  network: 'CryptoMine Network',
+                  status: 'Completed',
+                  positive: true,
+                  date: 'Just now'
+                });
+
+                try {
+                  const mainBotService = require('./mainBotService');
+                  if (mainBotService?.notifyReferrerCommission) {
+                    mainBotService.notifyReferrerCommission(tier3Id, comm3, 3, sourceAction);
+                  }
+                } catch (e) {}
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('DBService.distributeReferralCommission error:', err);
     }
   }
 

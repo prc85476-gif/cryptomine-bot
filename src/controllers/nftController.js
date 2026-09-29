@@ -95,6 +95,11 @@ exports.buyNFT = async (req, res) => {
       date: "Just now"
     });
 
+    // Distribute referral commission on NFT purchase
+    dbService.distributeReferralCommission(req.userId, nft.price, 'NFT Purchase').catch((e) => {
+      console.warn('Referral commission error on NFT buy:', e.message);
+    });
+
     return res.status(200).json({
       success: true,
       message: `Congratulations! ${nft.name} successfully deployed and mining started!`,

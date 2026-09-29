@@ -253,7 +253,7 @@ exports.getReferralInfo = async (req, res) => {
   try {
     const user = await dbService.getUser(req.userId, req.userMeta);
     const refData = await dbService.getReferrals(req.userId);
-    const botUsername = process.env.BOT_USERNAME || 'acryptomintadminwithdraw2bot';
+    const botUsername = process.env.BOT_USERNAME || 'cryptomintnftbot';
 
     return res.status(200).json({
       success: true,

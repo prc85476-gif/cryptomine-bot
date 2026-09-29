@@ -25,6 +25,10 @@ function getTelegramHeaders() {
       if (tgUser.last_name) headers['x-telegram-last-name'] = safeHeader(tgUser.last_name);
       if (tgUser.photo_url) headers['x-telegram-avatar'] = safeHeader(tgUser.photo_url);
     }
+    const startParam = window.TelegramService?.getStartParam ? window.TelegramService.getStartParam() : localStorage.getItem('cryptomine_referrer_param');
+    if (startParam) {
+      headers['x-telegram-start-param'] = safeHeader(startParam);
+    }
   } catch (e) {}
   return headers;
 }

@@ -58,7 +58,7 @@ const ReferralModule = {
       document.getElementById('referral-link-input')
     ];
     linkInputs.forEach(input => {
-      if (input) input.value = referralLink || `https://t.me/acryptomintadminwithdraw2bot?start=${referralCode || 'CRYPTO-9482'}`;
+      if (input) input.value = referralLink || `https://t.me/cryptomintnftbot?start=${referralCode || 'CRYPTO-9482'}`;
     });
 
     const codeBadges = document.querySelectorAll('.referral-code-text');
@@ -229,7 +229,7 @@ const ReferralModule = {
 
   shareOnTelegram() {
     window.TelegramService.hapticSelection();
-    const link = this.data?.referralLink || document.getElementById('referral-link-input-page')?.value || 'https://t.me/acryptomintadminwithdraw2bot';
+    const link = this.data?.referralLink || document.getElementById('referral-link-input-page')?.value || 'https://t.me/cryptomintnftbot';
     const message = `⛏️ Join CryptoMine with me and earn daily USDT crypto rewards with NFT Miners!\n🎁 Use my referral link to get bonus mining power:\n${link}`;
     const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(message)}`;
 

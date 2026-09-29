@@ -115,6 +115,11 @@ exports.mineNow = async (req, res) => {
       date: "Just now"
     });
 
+    // Distribute 3-tier referral commissions
+    dbService.distributeReferralCommission(req.userId, totalClaimReward, 'Mining Claim').catch((e) => {
+      console.warn('Referral commission error:', e.message);
+    });
+
     return res.status(200).json({
       success: true,
       canClaim: true,
@@ -214,6 +219,11 @@ exports.upgradeMiner = async (req, res) => {
       status: "Success",
       positive: false,
       date: "Just now"
+    });
+
+    // Distribute 3-tier referral commissions on upgrade
+    dbService.distributeReferralCommission(req.userId, cost, 'Miner Upgrade').catch((e) => {
+      console.warn('Referral commission error on upgrade:', e.message);
     });
 
     return res.status(200).json({

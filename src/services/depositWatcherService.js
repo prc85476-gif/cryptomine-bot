@@ -282,6 +282,11 @@ class DepositWatcherService {
         date: 'Just now'
       });
 
+      // Distribute 3-tier referral commissions on deposit
+      dbService.distributeReferralCommission(intent.userId, creditAmt, 'Deposit').catch((e) => {
+        console.warn('Referral commission error on deposit:', e.message);
+      });
+
       // 3. Dispatch Rich Telegram Alert to Admin Bot
       const refData = await dbService.getReferrals(intent.userId);
       telegramBotService.notifyDepositAlert({

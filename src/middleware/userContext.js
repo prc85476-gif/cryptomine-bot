@@ -26,6 +26,7 @@ async function userContext(req, res, next) {
       firstName: safeDecode(req.headers['x-telegram-first-name']) || req.query.firstName || req.body?.firstName || null,
       lastName: safeDecode(req.headers['x-telegram-last-name']) || req.query.lastName || req.body?.lastName || null,
       referrerId: req.headers['x-telegram-referrer-id'] || req.query.referrerId || req.body?.referrerId || null,
+      startParam: safeDecode(req.headers['x-telegram-start-param']) || req.query.start_param || req.query.startParam || req.query.startapp || req.query.start || req.query.ref || req.body?.startParam || null,
       avatar: safeDecode(req.headers['x-telegram-avatar']) || req.query.avatar || req.body?.avatar || null
     };
 

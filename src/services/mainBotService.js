@@ -64,13 +64,9 @@ class MainBotService {
         if (parts.length > 1) {
           const refParam = parts[1].trim();
           try {
-            // Find referrer by referral code or telegram_id
-            const refQuery = await db.query(
-              'SELECT telegram_id FROM users WHERE referral_code = $1 OR telegram_id = $2 LIMIT 1',
-              [refParam, isNaN(refParam) ? 0 : Number(refParam)]
-            );
-            if (refQuery.rows.length > 0 && refQuery.rows[0].telegram_id !== userId) {
-              referrerId = refQuery.rows[0].telegram_id;
+            referrerId = await dbService.findReferrerIdByCode(refParam);
+            if (referrerId && Number(referrerId) === Number(userId)) {
+              referrerId = null; // Cannot refer oneself
             }
           } catch (e) {
             console.warn('Referral param lookup warning:', e.message);
@@ -82,7 +78,8 @@ class MainBotService {
           username: from?.username || `user_${userId}`,
           firstName,
           lastName,
-          referrerId
+          referrerId,
+          startParam: parts.length > 1 ? parts[1].trim() : null
         }).catch((err) => {
           console.error('Error in main bot getUser:', err.message);
         });
@@ -327,6 +324,40 @@ class MainBotService {
         parse_mode: 'HTML',
         reply_markup: replyMarkup
       });
+    }
+  }
+
+  /**
+   * Send notification to referrer when a new user joins with their link
+   */
+  async notifyReferrerNewUser(referrerId, newUsername, newFirstName) {
+    if (!referrerId) return;
+    try {
+      const name = newUsername ? `@${newUsername.replace(/^@/, '')}` : (newFirstName || 'Miner');
+      const msg = `🎉 <b>New Referral Joined!</b> 👥\n━━━━━━━━━━━━━━━━━━━━\n👤 <b>${name}</b> just joined CryptoMine using your referral link!\n\n💎 <i>You will earn up to 10% daily commission from their mining rewards and upgrades!</i>`;
+      await this.sendMessageToUser(referrerId, {
+        text: msg,
+        parse_mode: 'HTML'
+      });
+    } catch (err) {
+      console.warn('notifyReferrerNewUser warning:', err.message);
+    }
+  }
+
+  /**
+   * Send notification to referrer when commission is earned
+   */
+  async notifyReferrerCommission(referrerId, amount, tier, sourceAction) {
+    if (!referrerId || !amount || amount <= 0) return;
+    try {
+      const formatted = parseFloat(amount).toFixed(4);
+      const msg = `💰 <b>Referral Commission Earned!</b> ⚡\n━━━━━━━━━━━━━━━━━━━━\n💸 <b>+${formatted} USDT</b> credited to your balance!\n📊 <b>Tier:</b> Tier ${tier}\n🎯 <b>Source:</b> ${sourceAction || 'Activity'}\n\n💎 <i>Keep sharing your referral link to earn more lifetime commissions!</i>`;
+      await this.sendMessageToUser(referrerId, {
+        text: msg,
+        parse_mode: 'HTML'
+      });
+    } catch (err) {
+      console.warn('notifyReferrerCommission warning:', err.message);
     }
   }
 }
