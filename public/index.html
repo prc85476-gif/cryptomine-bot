@@ -961,7 +961,7 @@
           <div class="withdraw-field-group">
             <div class="withdraw-networks-grid" id="deposit-networks-grid">
               <!-- 1. USDT BEP20 (Active by default) -->
-              <div class="withdraw-net-card active" data-network="USDT BEP20" data-address="0x5201A1A25315Eb9Cd3bcF3f6FEEA5312E1638675">
+              <div class="withdraw-net-card active" data-network="USDT BEP20" data-address="0x91AbcbAbE89945De4e491bf8850Bae836dB66547">
                 <div class="net-icon-wrap">
                   <div class="net-main-icon tether-bg">
                     <img src="/assets/icons/usdt-logo.avif" alt="USDT" class="net-img-icon" />
@@ -975,7 +975,7 @@
               </div>
 
               <!-- 2. BNB -->
-              <div class="withdraw-net-card" data-network="BNB" data-address="0x5201A1A25315Eb9Cd3bcF3f6FEEA5312E1638675">
+              <div class="withdraw-net-card" data-network="BNB" data-address="0x91AbcbAbE89945De4e491bf8850Bae836dB66547">
                 <div class="net-icon-wrap">
                   <div class="net-main-icon bnb-bg">
                     <svg viewBox="0 0 24 24" fill="none">
@@ -1006,7 +1006,7 @@
         </div>
       </div>
 
-      <!-- STEP 2: Payment Details View (2nd Image) -->
+      <!-- STEP 2: Payment Details View (Live Automatic Processing) -->
       <div id="deposit-step-2" class="deposit-step-view" style="display: none;">
         <!-- Top Header Row -->
         <div class="withdraw-page-header">
@@ -1061,7 +1061,7 @@
             <!-- Dynamic QR Code Card (Compact) -->
             <div class="deposit-qr-section">
               <div class="deposit-qr-box">
-                <img id="deposit-qr-image" src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=0x5201A1A25315Eb9Cd3bcF3f6FEEA5312E1638675" alt="Deposit Address QR Code" class="deposit-qr-img" />
+                <img id="deposit-qr-image" src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=0x91AbcbAbE89945De4e491bf8850Bae836dB66547" alt="Deposit Address QR Code" class="deposit-qr-img" />
               </div>
               <span class="deposit-qr-label">Scan to pay via Binance / Trust Wallet</span>
             </div>
@@ -1071,7 +1071,7 @@
           <div class="withdraw-field-group">
             <label class="withdraw-section-label">Address</label>
             <div class="deposit-address-card">
-              <div class="deposit-address-text" id="deposit-crypto-address">0x5201A1A25315Eb9Cd3bcF3f6FEEA5312E1638675</div>
+              <div class="deposit-address-text" id="deposit-crypto-address">0x91AbcbAbE89945De4e491bf8850Bae836dB66547</div>
               <button type="button" class="btn-copy-address-pill" id="btn-copy-deposit-addr">
                 <span>Copy address</span>
               </button>
@@ -1083,111 +1083,21 @@
             Send the exact amount to this address on the selected network. No extra payment page — details are here.
           </p>
 
-          <!-- 4. Waiting for Transfer Status Card -->
-          <div class="deposit-waiting-status-card">
-            <div class="waiting-icon-pulse">
+          <!-- 4. Waiting for Transfer Status Card (Live Real-Time Scanner) -->
+          <div class="deposit-waiting-status-card" id="deposit-live-status-card">
+            <div class="waiting-icon-pulse" id="deposit-status-pulse">
               <div class="pulse-ring"></div>
               <div class="pulse-core"></div>
             </div>
             <div class="waiting-text-col">
-              <h4 class="waiting-title">Waiting for transfer</h4>
-              <p class="waiting-desc">We check incoming payments automatically</p>
+              <h4 class="waiting-title" id="deposit-status-title">Waiting for transfer</h4>
+              <p class="waiting-desc" id="deposit-status-desc">We check incoming payments automatically</p>
+            </div>
+            <div class="waiting-live-badge" id="deposit-live-badge">
+              <span class="live-dot"></span>
+              <span>LIVE</span>
             </div>
           </div>
-        </div>
-
-        <!-- Bottom Step 2 Action Button (Proceed to Step 3) -->
-        <div class="withdraw-page-bottom">
-          <button class="btn-withdraw-submit-full" id="btn-proceed-to-step3">
-            <span>Proceed</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; margin-left: 6px; display: inline-block; vertical-align: middle;">
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-              <polyline points="12 5 19 12 12 19"></polyline>
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- STEP 3: Verify Payment / Submit TxID View -->
-      <div id="deposit-step-3" class="deposit-step-view" style="display: none;">
-        <!-- Top Header Row -->
-        <div class="withdraw-page-header">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <button class="btn-back-icon" id="btn-back-deposit-step2" aria-label="Back">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="15 18 9 12 15 6"></polyline>
-              </svg>
-            </button>
-            <h2 class="withdraw-page-title">Verify payment</h2>
-          </div>
-          <button class="withdraw-page-close-btn modal-close-btn" aria-label="Close">
-            <span>Close</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-
-        <!-- Scrollable Form Body -->
-        <div class="withdraw-page-body deposit-compact-body">
-          <!-- 1. Deposit Transfer Recap Card -->
-          <div class="deposit-recap-card">
-            <div class="recap-header-row">
-              <div class="recap-badge">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 13px; height: 13px;">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <polyline points="12 6 12 12 16 14"></polyline>
-                </svg>
-                <span>Awaiting TxID Confirmation</span>
-              </div>
-              <span class="recap-net-badge" id="recap-deposit-network">USDT BEP20</span>
-            </div>
-            
-            <div class="recap-amount-row">
-              <span class="recap-amount-val" id="recap-deposit-amount">3.00 USDT</span>
-              <span class="recap-amount-sub">Amount to be credited to balance</span>
-            </div>
-
-            <div class="recap-dest-row">
-              <span class="recap-dest-lbl">Deposit Address:</span>
-              <span class="recap-dest-addr" id="recap-deposit-addr">0x5201...8675</span>
-            </div>
-          </div>
-
-          <!-- 2. Transaction ID Input Field -->
-          <div class="withdraw-field-group">
-            <div class="field-label-row">
-              <label class="withdraw-section-label" for="deposit-txhash-input">Transaction Hash / TxID</label>
-              <span class="field-required-tag">Required</span>
-            </div>
-            <div class="withdraw-wallet-card deposit-tx-card">
-              <input type="text" id="deposit-txhash-input" class="withdraw-wallet-input" placeholder="Paste 0x... or TxID here" autocomplete="off" spellcheck="false" />
-              <button type="button" class="btn-paste-wallet" id="btn-paste-deposit-txhash">Paste</button>
-            </div>
-            <span class="deposit-input-hint">Copy the Transaction Hash / TxID from your Binance, Trust Wallet, OKX, or Bybit withdrawal history.</span>
-          </div>
-
-          <!-- 3. Automated Verification Info Card -->
-          <div class="deposit-verify-info-card">
-            <div class="verify-info-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                <path d="M9 12l2 2 4-4"></path>
-              </svg>
-            </div>
-            <div class="verify-info-text">
-              <h4 class="verify-info-title">Instant Verification & Add Balance</h4>
-              <p class="verify-info-desc">Submitting your TxID securely links and validates your transfer on the blockchain and instantly credits USDT to your mining balance.</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Bottom Confirm Submit Button -->
-        <div class="withdraw-page-bottom">
-          <button class="btn-withdraw-submit-full" id="btn-confirm-tx-hash">
-            <span>Confirm & Add USDT</span>
-          </button>
         </div>
       </div>
     </div>

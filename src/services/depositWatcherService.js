@@ -3,17 +3,17 @@ const dbService = require('./dbService');
 const telegramBotService = require('./telegramBotService');
 const mainBotService = require('./mainBotService');
 
-// BSC RPC Endpoints with automatic fallback
+// BSC RPC Endpoints with automatic fallback (tested for eth_getLogs reliability)
 const BSC_RPCS = [
-  'https://bsc.publicnode.com',
-  'https://binance.llamarpc.com',
+  'https://bsc-rpc.publicnode.com',
   'https://1rpc.io/bnb',
-  'https://bsc-dataseed.binance.org/',
-  'https://bsc-dataseed1.defibit.io/'
+  'https://bsc.drpc.org',
+  'https://bsc.publicnode.com',
+  'https://bsc-dataseed.binance.org/'
 ];
 
 const USDT_BEP20_CONTRACT = process.env.USDT_BEP20_CONTRACT || '0x55d398326f99059fF775485246999027B3197955';
-const DEFAULT_DEPOSIT_ADDRESS = process.env.DEPOSIT_WALLET_ADDRESS || '0x5201A1A25315Eb9Cd3bcF3f6FEEA5312E1638675';
+const DEFAULT_DEPOSIT_ADDRESS = process.env.DEPOSIT_WALLET_ADDRESS || '0x91AbcbAbE89945De4e491bf8850Bae836dB66547';
 
 const ERC20_TRANSFER_ABI = [
   'event Transfer(address indexed from, address indexed to, uint256 value)'
@@ -36,7 +36,8 @@ class DepositWatcherService {
   initProvider() {
     try {
       const rpcUrl = BSC_RPCS[this.currentRpcIndex];
-      this.provider = new ethers.JsonRpcProvider(rpcUrl);
+      const bscNetwork = ethers.Network.from(56);
+      this.provider = new ethers.JsonRpcProvider(rpcUrl, bscNetwork, { staticNetwork: bscNetwork });
     } catch (err) {
       console.error('DepositWatcher provider init error:', err.message);
     }
@@ -203,10 +204,27 @@ class DepositWatcherService {
         const txHash = ev.transactionHash;
         if (this.processedTxHashes.has(txHash)) continue;
 
-        const valueFormatted = parseFloat(ethers.formatUnits(ev.args.value, 18)).toFixed(4);
+        const rawValue = ethers.formatUnits(ev.args.value, 18);
+        const valueFormatted = parseFloat(rawValue).toFixed(4);
+        const valueNum = parseFloat(valueFormatted);
         
-        // Check if there is an active deposit intent matching this exact amount
-        const matchingIntent = this.activeIntents.get(valueFormatted);
+        // 1. Direct match by exactAmount string
+        let matchingIntent = this.activeIntents.get(valueFormatted);
+
+        // 2. Fallback: Flexible match if user sent exactAmount with slight float variance or baseAmount
+        if (!matchingIntent) {
+          for (const [, intent] of this.activeIntents.entries()) {
+            if (intent.status === 'Waiting') {
+              const intentExactNum = parseFloat(intent.exactAmount);
+              const intentBaseNum = parseFloat(intent.baseAmount);
+              if (Math.abs(valueNum - intentExactNum) <= 0.0002 || Math.abs(valueNum - intentBaseNum) <= 0.0002) {
+                matchingIntent = intent;
+                break;
+              }
+            }
+          }
+        }
+
         if (matchingIntent && matchingIntent.status === 'Waiting') {
           console.log(`🔥 MATCHED ON-CHAIN DEPOSIT! Tx: ${txHash} | Amount: ${valueFormatted} USDT | User: ${matchingIntent.userId}`);
           this.processedTxHashes.add(txHash);

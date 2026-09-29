@@ -1486,6 +1486,87 @@
   color: #94A3B8;
 }
 
+.waiting-live-badge {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563EB;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .waiting-live-badge {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60A5FA;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.waiting-live-badge .live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2563EB;
+  box-shadow: 0 0 6px #2563EB;
+  animation: liveDotBlink 1.2s infinite ease-in-out;
+}
+
+[data-theme="dark"] .waiting-live-badge .live-dot {
+  background: #60A5FA;
+  box-shadow: 0 0 6px #60A5FA;
+}
+
+@keyframes liveDotBlink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.7); }
+}
+
+/* Success / Confirmed State for Deposit Card */
+.deposit-waiting-status-card.confirmed {
+  background: rgba(16, 185, 129, 0.1) !important;
+  border-color: #10B981 !important;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.25);
+  transition: all 0.35s ease;
+}
+
+.deposit-waiting-status-card.confirmed .pulse-core {
+  background: #10B981 !important;
+}
+
+.deposit-waiting-status-card.confirmed .pulse-ring {
+  background: rgba(16, 185, 129, 0.3) !important;
+}
+
+.deposit-waiting-status-card.confirmed .waiting-title {
+  color: #059669 !important;
+}
+
+[data-theme="dark"] .deposit-waiting-status-card.confirmed .waiting-title {
+  color: #34D399 !important;
+}
+
+.deposit-waiting-status-card.confirmed .waiting-live-badge {
+  background: rgba(16, 185, 129, 0.2) !important;
+  color: #059669 !important;
+  border-color: #10B981 !important;
+}
+
+[data-theme="dark"] .deposit-waiting-status-card.confirmed .waiting-live-badge {
+  color: #34D399 !important;
+}
+
+.deposit-waiting-status-card.confirmed .waiting-live-badge .live-dot {
+  background: #10B981 !important;
+  box-shadow: 0 0 8px #10B981 !important;
+}
+
 /* Deposit Step View Slide Animations */
 .deposit-step-view {
   display: flex;

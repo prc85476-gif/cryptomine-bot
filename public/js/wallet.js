@@ -5,7 +5,7 @@ const WalletModule = {
   currentDepositNetwork: 'USDT BEP20',
   currentDepositAmount: 3,
   currentExactAmount: '3.0000',
-  depositAddress: '0x5201A1A25315Eb9Cd3bcF3f6FEEA5312E1638675',
+  depositAddress: '0x91AbcbAbE89945De4e491bf8850Bae836dB66547',
   currentWithdrawNetwork: 'USDT BEP20',
   depositPollInterval: null,
 
@@ -46,10 +46,9 @@ const WalletModule = {
   openDepositPage() {
     this.stopDepositPolling();
 
-    // Reset all steps to Step 1
+    // Reset steps
     const step1 = document.getElementById('deposit-step-1');
     const step2 = document.getElementById('deposit-step-2');
-    const step3 = document.getElementById('deposit-step-3');
     if (step1) {
       step1.classList.add('active');
       step1.style.display = 'flex';
@@ -58,10 +57,16 @@ const WalletModule = {
       step2.classList.remove('active');
       step2.style.display = 'none';
     }
-    if (step3) {
-      step3.classList.remove('active');
-      step3.style.display = 'none';
-    }
+
+    // Reset Live Status Card in Step 2 to waiting state
+    const liveCard = document.getElementById('deposit-live-status-card');
+    const liveTitle = document.getElementById('deposit-status-title');
+    const liveDesc = document.getElementById('deposit-status-desc');
+    const liveBadge = document.getElementById('deposit-live-badge');
+    if (liveCard) liveCard.classList.remove('confirmed');
+    if (liveTitle) liveTitle.textContent = 'Waiting for transfer';
+    if (liveDesc) liveDesc.textContent = 'We check incoming payments automatically';
+    if (liveBadge) liveBadge.innerHTML = '<span class="live-dot"></span><span>LIVE</span>';
 
     // Default amount 3
     const amtInput = document.getElementById('topup-amount-input');
@@ -80,7 +85,7 @@ const WalletModule = {
 
     // Default network USDT BEP20
     this.currentDepositNetwork = 'USDT BEP20';
-    this.depositAddress = '0x5201A1A25315Eb9Cd3bcF3f6FEEA5312E1638675';
+    this.depositAddress = '0x91AbcbAbE89945De4e491bf8850Bae836dB66547';
     const netCards = document.querySelectorAll('#deposit-networks-grid .withdraw-net-card');
     netCards.forEach(c => {
       if (c.dataset.network === 'USDT BEP20') c.classList.add('active');
@@ -93,7 +98,7 @@ const WalletModule = {
   startDepositPolling() {
     this.stopDepositPolling();
     this.depositPollInterval = setInterval(async () => {
-      // Only poll if modal-deposit is currently visible and active
+      // Only poll if modal-deposit is currently open and visible
       const modalDep = document.getElementById('modal-deposit');
       if (!modalDep || !modalDep.classList.contains('active')) {
         this.stopDepositPolling();
@@ -108,7 +113,7 @@ const WalletModule = {
       } catch (err) {
         console.warn('Deposit status polling error:', err);
       }
-    }, 2800); // Check every 2.8 seconds
+    }, 2000); // Check every 2 seconds for ultra fast response
   },
 
   stopDepositPolling() {
@@ -120,11 +125,26 @@ const WalletModule = {
 
   handleDepositConfirmed(res) {
     this.stopDepositPolling();
+
+    // 1. Trigger celebratory audio & haptic feedback
     window.TelegramService.hapticNotification('success');
     if (window.MiningModule && window.MiningModule.playSuccessSound) {
       window.MiningModule.playSuccessSound();
     }
 
+    // 2. Transform Step 2 status card to glowing green confirmed state
+    const liveCard = document.getElementById('deposit-live-status-card');
+    const liveTitle = document.getElementById('deposit-status-title');
+    const liveDesc = document.getElementById('deposit-status-desc');
+    const liveBadge = document.getElementById('deposit-live-badge');
+
+    const creditAmt = res.baseAmount || this.currentDepositAmount;
+    if (liveCard) liveCard.classList.add('confirmed');
+    if (liveTitle) liveTitle.textContent = '🎉 Payment Confirmed & Added!';
+    if (liveDesc) liveDesc.textContent = `+${parseFloat(creditAmt).toFixed(2)} USDT credited to your balance.`;
+    if (liveBadge) liveBadge.innerHTML = '<span class="live-dot"></span><span>CREDITED</span>';
+
+    // 3. Update app state & UI immediately
     const newDepBal = res.depositBalance !== undefined ? res.depositBalance : 0;
     const newBal = res.newBalance !== undefined ? res.newBalance : 0;
 
@@ -137,10 +157,14 @@ const WalletModule = {
       window.MiningModule.updateBalanceUI(newBal, newDepBal);
     }
 
-    const amtText = res.baseAmount ? `${res.baseAmount} USDT` : `${this.currentDepositAmount} USDT`;
+    const amtText = `${parseFloat(creditAmt).toFixed(2)} USDT`;
     window.ModalManager.showToast(`🎉 Deposit of ${amtText} Confirmed & Added!`, 'success');
-    window.ModalManager.closeModal('modal-deposit');
-    this.loadProfileWalletStats();
+
+    // 4. Auto close modal after brief celebration
+    setTimeout(() => {
+      window.ModalManager.closeModal('modal-deposit');
+      this.loadProfileWalletStats();
+    }, 2500);
   },
 
   bindDepositEvents() {
@@ -177,7 +201,7 @@ const WalletModule = {
         netCards.forEach(c => c.classList.remove('active'));
         card.classList.add('active');
         this.currentDepositNetwork = card.dataset.network || 'USDT BEP20';
-        this.depositAddress = card.dataset.address || '0x5201A1A25315Eb9Cd3bcF3f6FEEA5312E1638675';
+        this.depositAddress = card.dataset.address || '0x91AbcbAbE89945De4e491bf8850Bae836dB66547';
       });
     });
 
@@ -204,11 +228,6 @@ const WalletModule = {
         this.stopDepositPolling();
         const step1 = document.getElementById('deposit-step-1');
         const step2 = document.getElementById('deposit-step-2');
-        const step3 = document.getElementById('deposit-step-3');
-        if (step3) {
-          step3.classList.remove('active');
-          step3.style.display = 'none';
-        }
         if (step2) {
           step2.classList.remove('active');
           step2.style.display = 'none';
@@ -245,67 +264,6 @@ const WalletModule = {
         window.ModalManager.showToast(`Exact amount ${amtStr} USDT copied!`, 'success');
       });
     }
-
-    // Proceed from Step 2 to Step 3 (Verify / Submit TxID or instant check)
-    const proceedStep3Btn = document.getElementById('btn-proceed-to-step3');
-    if (proceedStep3Btn) {
-      proceedStep3Btn.addEventListener('click', async () => {
-        window.TelegramService.hapticImpact('medium');
-        const origText = proceedStep3Btn.innerHTML;
-        proceedStep3Btn.disabled = true;
-        proceedStep3Btn.innerHTML = '<span>Checking blockchain...</span>';
-
-        try {
-          const res = await window.ApiService.checkDepositStatus();
-          if (res && res.confirmed === true) {
-            this.handleDepositConfirmed(res);
-            return;
-          }
-        } catch (e) {
-          console.warn('Status check error on Proceed:', e);
-        } finally {
-          proceedStep3Btn.disabled = false;
-          proceedStep3Btn.innerHTML = origText;
-        }
-
-        // If not yet confirmed, take user to Step 3
-        this.goToDepositStep3();
-      });
-    }
-
-    // Back from Step 3 to Step 2
-    const backStep2Btn = document.getElementById('btn-back-deposit-step2');
-    if (backStep2Btn) {
-      backStep2Btn.addEventListener('click', () => this.backToDepositStep2());
-    }
-
-    // Paste TxID button in Step 3
-    const pasteTxBtn = document.getElementById('btn-paste-deposit-txhash');
-    const txInput = document.getElementById('deposit-txhash-input');
-    if (pasteTxBtn && txInput) {
-      pasteTxBtn.addEventListener('click', async () => {
-        window.TelegramService.hapticSelection();
-        try {
-          if (navigator.clipboard && navigator.clipboard.readText) {
-            const text = await navigator.clipboard.readText();
-            if (text) {
-              txInput.value = text.trim();
-              window.ModalManager.showToast('TxID pasted from clipboard!', 'success');
-              return;
-            }
-          }
-        } catch (e) {
-          console.warn('Clipboard read error:', e);
-        }
-        txInput.focus();
-      });
-    }
-
-    // Submit / Confirm TxID Deposit Action in Step 3
-    const confirmTxBtn = document.getElementById('btn-confirm-tx-hash');
-    if (confirmTxBtn) {
-      confirmTxBtn.addEventListener('click', () => this.handleDeposit());
-    }
   },
 
   async goToDepositStep2() {
@@ -313,12 +271,21 @@ const WalletModule = {
 
     const step1 = document.getElementById('deposit-step-1');
     const step2 = document.getElementById('deposit-step-2');
-    const step3 = document.getElementById('deposit-step-3');
     const proceedTopupBtn = document.getElementById('btn-proceed-topup');
 
     const amountNum = parseFloat(this.currentDepositAmount) || 3;
 
-    // Show loading state on button while generating unique amount intent
+    // Reset live status card
+    const liveCard = document.getElementById('deposit-live-status-card');
+    const liveTitle = document.getElementById('deposit-status-title');
+    const liveDesc = document.getElementById('deposit-status-desc');
+    const liveBadge = document.getElementById('deposit-live-badge');
+    if (liveCard) liveCard.classList.remove('confirmed');
+    if (liveTitle) liveTitle.textContent = 'Waiting for transfer';
+    if (liveDesc) liveDesc.textContent = 'We check incoming payments automatically';
+    if (liveBadge) liveBadge.innerHTML = '<span class="live-dot"></span><span>LIVE</span>';
+
+    // Show loading state on button while registering deposit intent
     if (proceedTopupBtn) {
       proceedTopupBtn.disabled = true;
       proceedTopupBtn.innerHTML = '<span>Preparing details...</span>';
@@ -356,11 +323,11 @@ const WalletModule = {
     if (payAmtEl) payAmtEl.textContent = `${this.currentExactAmount} USDT`;
     if (payBalEl) payBalEl.textContent = `${amountNum.toFixed(2)} USDT`;
     if (payNetNameEl) payNetNameEl.textContent = this.currentDepositNetwork || 'USDT BEP20';
-    if (addrEl) addrEl.textContent = this.depositAddress || '0x5201A1A25315Eb9Cd3bcF3f6FEEA5312E1638675';
+    if (addrEl) addrEl.textContent = this.depositAddress || '0x91AbcbAbE89945De4e491bf8850Bae836dB66547';
 
     // Update dynamic QR Code
     if (qrImgEl) {
-      const targetAddr = this.depositAddress || '0x5201A1A25315Eb9Cd3bcF3f6FEEA5312E1638675';
+      const targetAddr = this.depositAddress || '0x91AbcbAbE89945De4e491bf8850Bae836dB66547';
       qrImgEl.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(targetAddr)}`;
     }
 
@@ -394,75 +361,12 @@ const WalletModule = {
       step1.classList.remove('active');
       step1.style.display = 'none';
     }
-    if (step3) {
-      step3.classList.remove('active');
-      step3.style.display = 'none';
-    }
     if (step2) {
       step2.classList.add('active');
       step2.style.display = 'flex';
     }
 
     // Start automated background polling on Step 2
-    this.startDepositPolling();
-  },
-
-  goToDepositStep3() {
-    window.TelegramService.hapticImpact('medium');
-
-    const step1 = document.getElementById('deposit-step-1');
-    const step2 = document.getElementById('deposit-step-2');
-    const step3 = document.getElementById('deposit-step-3');
-
-    const amountNum = parseFloat(this.currentDepositAmount) || 3;
-    const recapAmtEl = document.getElementById('recap-deposit-amount');
-    const recapNetEl = document.getElementById('recap-deposit-network');
-    const recapAddrEl = document.getElementById('recap-deposit-addr');
-    const txInput = document.getElementById('deposit-txhash-input');
-
-    if (recapAmtEl) recapAmtEl.textContent = `${amountNum.toFixed(2)} USDT`;
-    if (recapNetEl) recapNetEl.textContent = this.currentDepositNetwork || 'USDT BEP20';
-    if (recapAddrEl) {
-      const addr = this.depositAddress || '0x5201A1A25315Eb9Cd3bcF3f6FEEA5312E1638675';
-      recapAddrEl.textContent = `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
-    }
-    if (txInput) txInput.value = '';
-
-    if (step1) {
-      step1.classList.remove('active');
-      step1.style.display = 'none';
-    }
-    if (step2) {
-      step2.classList.remove('active');
-      step2.style.display = 'none';
-    }
-    if (step3) {
-      step3.classList.add('active');
-      step3.style.display = 'flex';
-    }
-  },
-
-  backToDepositStep2() {
-    window.TelegramService.hapticSelection();
-
-    const step1 = document.getElementById('deposit-step-1');
-    const step2 = document.getElementById('deposit-step-2');
-    const step3 = document.getElementById('deposit-step-3');
-
-    if (step3) {
-      step3.classList.remove('active');
-      step3.style.display = 'none';
-    }
-    if (step1) {
-      step1.classList.remove('active');
-      step1.style.display = 'none';
-    }
-    if (step2) {
-      step2.classList.add('active');
-      step2.style.display = 'flex';
-    }
-
-    // Resume polling
     this.startDepositPolling();
   },
 
