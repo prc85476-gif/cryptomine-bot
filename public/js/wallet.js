@@ -84,54 +84,6 @@ const WalletModule = {
     });
 
     window.ModalManager.openModal('modal-deposit');
-
-    // Explicitly render Turnstile Captcha for Deposit Step 1
-    setTimeout(() => {
-      this.renderDepositTurnstile();
-    }, 100);
-  },
-
-  depositTurnstileWidgetId: null,
-  depositTurnstileToken: '',
-
-  renderDepositTurnstile() {
-    const container = document.getElementById('cf-turnstile-deposit-container');
-    if (!container) return;
-
-    if (!window.turnstile) {
-      setTimeout(() => this.renderDepositTurnstile(), 250);
-      return;
-    }
-
-    try {
-      if (this.depositTurnstileWidgetId !== null) {
-        try { window.turnstile.remove(this.depositTurnstileWidgetId); } catch (e) {}
-        this.depositTurnstileWidgetId = null;
-      }
-      container.innerHTML = '';
-
-      const sitekey = this.siteKeys[this.currentSiteKeyIndex] || '1x00000000000000000000AA';
-      this.depositTurnstileWidgetId = window.turnstile.render(container, {
-        sitekey: sitekey,
-        theme: 'auto',
-        size: 'flexible',
-        callback: (token) => {
-          this.depositTurnstileToken = token;
-        },
-        'error-callback': (errorCode) => {
-          console.warn('Deposit Turnstile error on key:', sitekey, 'Error code:', errorCode);
-          if (this.currentSiteKeyIndex < this.siteKeys.length - 1) {
-            this.currentSiteKeyIndex++;
-            setTimeout(() => this.renderDepositTurnstile(), 150);
-          }
-        },
-        'expired-callback': () => {
-          this.depositTurnstileToken = '';
-        }
-      });
-    } catch (err) {
-      console.warn('Deposit Turnstile render exception:', err);
-    }
   },
 
   bindDepositEvents() {
@@ -179,21 +131,6 @@ const WalletModule = {
         const amt = parseFloat(amtInput?.value) || 0;
         if (amt < 1) {
           window.ModalManager.showToast('Minimum deposit amount is 1 USDT', 'error');
-          return;
-        }
-
-        // Cloudflare Turnstile Captcha verification check
-        let turnstileToken = this.depositTurnstileToken;
-        if (window.turnstile && this.depositTurnstileWidgetId !== null) {
-          try {
-            turnstileToken = window.turnstile.getResponse(this.depositTurnstileWidgetId) || this.depositTurnstileToken;
-          } catch (e) {}
-        }
-
-        const turnstileWidget = document.getElementById('cf-turnstile-deposit-container');
-        if (turnstileWidget && window.turnstile && !turnstileToken) {
-          window.TelegramService.hapticNotification('warning');
-          window.ModalManager.showToast('Please complete Captcha verification!', 'error');
           return;
         }
 
