@@ -92,108 +92,14 @@ exports.deposit = async (req, res) => {
   }
 };
 
-const pendingWithdrawalCodes = new Map(); // userId -> { code, amount, address, network, expiresAt }
-
-exports.requestWithdrawCode = async (req, res) => {
+exports.withdraw = async (req, res) => {
   try {
     const { amount, address, network, turnstileToken } = req.body;
     const withdrawAmt = parseFloat(amount);
     const selectedNet = network || 'USDT BEP20';
     const isBep20 = selectedNet.toUpperCase().includes('BEP20');
     const minAmt = isBep20 ? 0.15 : 10.0;
-
-    if (!withdrawAmt || withdrawAmt < minAmt) {
-      return res.status(400).json({
-        success: false,
-        message: `Minimum withdrawal amount for ${selectedNet} is ${minAmt} USDT`
-      });
-    }
-
-    const user = await dbService.getUser(req.userId, req.userMeta);
-
-    if (user.balance < withdrawAmt) {
-      return res.status(400).json({
-        success: false,
-        message: `Insufficient withdrawable balance! Your current balance is ${user.balance.toFixed(4)} USDT.`
-      });
-    }
-
-    if (!address || address.length < 5) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter a valid crypto withdrawal address"
-      });
-    }
-
-    // Generate random 4-digit security PIN
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
-
-    pendingWithdrawalCodes.set(String(req.userId), {
-      code,
-      amount: withdrawAmt,
-      address,
-      network: selectedNet,
-      expiresAt
-    });
-
-    // Send 4-digit code with custom generated Security Card image to user's Telegram
-    const telegramId = user.telegramId || req.userId;
-    mainBotService.sendWithdrawalSecurityCode(telegramId, {
-      code,
-      amount: withdrawAmt.toFixed(4),
-      network: selectedNet,
-      address
-    }).catch((err) => {
-      console.warn('Could not send security code photo to Telegram:', err.message);
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: 'A 4-digit security code with a protection card has been sent to your Telegram Bot!',
-      expiresInSeconds: 600
-    });
-  } catch (err) {
-    console.error('walletController.requestWithdrawCode error:', err);
-    return res.status(500).json({ success: false, message: err.message, error: err.message });
-  }
-};
-
-exports.withdraw = async (req, res) => {
-  try {
-    const { amount, address, network, turnstileToken, code } = req.body;
-    const withdrawAmt = parseFloat(amount);
-    const selectedNet = network || 'USDT BEP20';
-    const isBep20 = selectedNet.toUpperCase().includes('BEP20');
-    const minAmt = isBep20 ? 0.15 : 10.0;
     const fee = isBep20 ? 0.005 : 1.0;
-
-    // 1. Verify 4-digit security code
-    const stored = pendingWithdrawalCodes.get(String(req.userId));
-    if (!stored) {
-      return res.status(400).json({
-        success: false,
-        message: 'Security code expired or not requested. Please request a new verification code.'
-      });
-    }
-
-    if (Date.now() > stored.expiresAt) {
-      pendingWithdrawalCodes.delete(String(req.userId));
-      return res.status(400).json({
-        success: false,
-        message: 'Verification code expired (valid for 10 minutes). Please request a new code.'
-      });
-    }
-
-    if (!code || String(code).trim() !== String(stored.code).trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid 4-digit security code! Please check the code sent to your Telegram bot.'
-      });
-    }
-
-    // Code is valid - clear it
-    pendingWithdrawalCodes.delete(String(req.userId));
 
     if (!withdrawAmt || withdrawAmt < minAmt) {
       return res.status(400).json({
