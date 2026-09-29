@@ -46,6 +46,9 @@ const ModalManager = {
   },
 
   showToast(message, type = 'info') {
+    if (!message || message === 'undefined') {
+      message = type === 'error' ? 'An unexpected error occurred. Please try again.' : 'Action completed';
+    }
     const container = document.getElementById('toast-container') || this.createToastContainer();
     const toast = document.createElement('div');
     toast.className = `toast-msg ${type}`;

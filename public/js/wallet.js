@@ -684,22 +684,42 @@ const WalletModule = {
       return;
     }
 
+    const submitBtn = document.getElementById('btn-submit-withdraw');
+    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : '<span>Withdraw USDT</span>';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span>Submitting Request...</span>';
+    }
+
     window.TelegramService.hapticImpact('heavy');
-    const res = await window.ApiService.withdraw(amt, addr, this.currentWithdrawNetwork, turnstileToken);
-    if (res.success) {
-      window.TelegramService.hapticNotification('success');
-      window.MiningModule.playSuccessSound();
-      window.ModalManager.showToast(res.message, 'success');
-      window.appState.setState({ balance: res.newBalance });
-      window.MiningModule.updateBalanceUI(res.newBalance);
-      window.ModalManager.closeModal('modal-withdraw');
-      if (amtInput) amtInput.value = '';
-      if (addrInput) addrInput.value = '';
-      this.turnstileToken = '';
-      this.updateWithdrawCalculation();
-      this.loadProfileWalletStats();
-    } else {
-      window.ModalManager.showToast(res.message, 'error');
+    try {
+      const res = await window.ApiService.withdraw(amt, addr, this.currentWithdrawNetwork, turnstileToken);
+      if (res && res.success) {
+        window.TelegramService.hapticNotification('success');
+        window.MiningModule.playSuccessSound();
+        window.ModalManager.showToast(res.message || 'Withdrawal request submitted successfully!', 'success');
+        window.appState.setState({ balance: res.newBalance });
+        if (window.MiningModule && window.MiningModule.updateBalanceUI) {
+          window.MiningModule.updateBalanceUI(res.newBalance);
+        }
+        window.ModalManager.closeModal('modal-withdraw');
+        if (amtInput) amtInput.value = '';
+        if (addrInput) addrInput.value = '';
+        this.turnstileToken = '';
+        this.updateWithdrawCalculation();
+        this.loadProfileWalletStats();
+      } else {
+        const errMsg = res?.message || res?.error || 'Withdrawal failed. Please check details and try again.';
+        window.ModalManager.showToast(errMsg, 'error');
+      }
+    } catch (err) {
+      console.error('Withdraw error:', err);
+      window.ModalManager.showToast('Network error while processing withdrawal. Please try again.', 'error');
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnHtml;
+      }
     }
   },
 
