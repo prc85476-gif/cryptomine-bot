@@ -842,6 +842,118 @@
           </div>
         </section>
 
+        <!-- ===================================================================
+             TAB 6: GIFTBOX MYSTERY GIFTS PAGE
+             =================================================================== -->
+        <section id="tab-giftbox" class="tab-page giftbox-page">
+          <!-- Top Navigation Row with Big Back Button -->
+          <div class="giftbox-top-bar">
+            <button class="giftbox-back-btn" id="btn-giftbox-back" aria-label="Go Back to Home">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+              </svg>
+            </button>
+            <div class="giftbox-title-wrap">
+              <h1 class="giftbox-heading">Open gifts and get free coins</h1>
+              <p class="giftbox-subheading">Tap on any gift box to open & claim instant rewards!</p>
+            </div>
+          </div>
+
+          <!-- 2-Column Gift Boxes Grid matching Reference Screenshot -->
+          <div class="giftbox-grid">
+            <!-- 1. BTC Gift Box -->
+            <div class="giftbox-card" data-gift-id="btc" data-gift-name="BTC Gift Box" data-gift-type="BTC">
+              <!-- Corner Ribbon Badge -->
+              <div class="gift-corner-ribbon">
+                <span>GIFT</span>
+              </div>
+              
+              <!-- Card Header / Title inside -->
+              <div class="gift-card-header btc-theme">
+                <h3 class="gift-card-title">BTC GIFT</h3>
+              </div>
+
+              <!-- 3D Artwork Image -->
+              <div class="gift-art-wrap">
+                <img src="/assets/images/gifts/gift-btc.jpg" alt="BTC Gift Box" class="gift-art-img" loading="lazy" />
+              </div>
+
+              <!-- Footer Badges -->
+              <div class="gift-card-footer">
+                <div class="gift-tag-item coins">
+                  <span class="gift-tag-icon">💎</span>
+                  <span class="gift-tag-txt">Coins</span>
+                </div>
+                <div class="gift-tag-item usdt">
+                  <span class="gift-tag-icon">₮</span>
+                  <span class="gift-tag-txt">USDT gifts</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. ETH Gift Box -->
+            <div class="giftbox-card" data-gift-id="eth" data-gift-name="ETH Gift Box" data-gift-type="ETH">
+              <!-- Corner Ribbon Badge -->
+              <div class="gift-corner-ribbon">
+                <span>GIFT</span>
+              </div>
+              
+              <!-- Card Header / Title inside -->
+              <div class="gift-card-header eth-theme">
+                <h3 class="gift-card-title">ETH GIFT</h3>
+              </div>
+
+              <!-- 3D Artwork Image -->
+              <div class="gift-art-wrap">
+                <img src="/assets/images/gifts/gift-eth.jpg" alt="ETH Gift Box" class="gift-art-img" loading="lazy" />
+              </div>
+
+              <!-- Footer Badges -->
+              <div class="gift-card-footer">
+                <div class="gift-tag-item coins">
+                  <span class="gift-tag-icon">💎</span>
+                  <span class="gift-tag-txt">Coins</span>
+                </div>
+                <div class="gift-tag-item usdt">
+                  <span class="gift-tag-icon">₮</span>
+                  <span class="gift-tag-txt">USDT gifts</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. GRAM / TON Gift Box -->
+            <div class="giftbox-card" data-gift-id="gram" data-gift-name="GRAM Gift Box" data-gift-type="GRAM">
+              <!-- Corner Ribbon Badge -->
+              <div class="gift-corner-ribbon">
+                <span>GIFT</span>
+              </div>
+              
+              <!-- Card Header / Title inside -->
+              <div class="gift-card-header gram-theme">
+                <h3 class="gift-card-title">GRAM GIFT</h3>
+              </div>
+
+              <!-- 3D Artwork Image -->
+              <div class="gift-art-wrap">
+                <img src="/assets/images/gifts/gift-gram.jpg" alt="GRAM Gift Box" class="gift-art-img" loading="lazy" />
+              </div>
+
+              <!-- Footer Badges -->
+              <div class="gift-card-footer">
+                <div class="gift-tag-item coins">
+                  <span class="gift-tag-icon">💎</span>
+                  <span class="gift-tag-txt">Coins</span>
+                </div>
+                <div class="gift-tag-item usdt">
+                  <span class="gift-tag-icon">₮</span>
+                  <span class="gift-tag-txt">USDT gifts</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
       </main>
 
       <!-- Live Withdrawal Social Proof Popup -->
@@ -1384,6 +1496,27 @@
     </div>
   </div>
 
+  <!-- Modal 6: Gift Box Reward Reveal Modal -->
+  <div class="modal-backdrop" id="modal-gift-reveal">
+    <div class="modal-sheet gift-reveal-sheet" style="text-align: center; padding: 24px 20px;">
+      <div class="sheet-handle"></div>
+      <div class="gift-reveal-icon-wrap" style="margin: 8px auto 16px;">
+        <img id="gift-modal-img" src="/assets/images/gifts/gift-btc.jpg" alt="Gift Box" style="width: 120px; height: 120px; object-fit: contain; border-radius: 18px; box-shadow: 0 10px 30px rgba(168, 85, 247, 0.25);" />
+      </div>
+      <h3 id="gift-modal-title" style="font-size: 20px; font-weight: 800; color: var(--text-main, #1e293b); margin-bottom: 6px;">BTC Gift Box</h3>
+      <p style="font-size: 13px; color: var(--text-secondary, #64748b); margin-bottom: 18px;">Congratulations! You found a mystery crypto reward.</p>
+      
+      <div style="background: rgba(16, 185, 129, 0.08); border: 1.5px dashed #10b981; border-radius: 14px; padding: 14px 16px; margin-bottom: 22px;">
+        <span style="font-size: 12px; font-weight: 600; color: #059669; text-transform: uppercase; letter-spacing: 0.5px;">Reward Unlocked</span>
+        <div id="gift-reward-val" style="font-size: 26px; font-weight: 900; color: #10b981; margin-top: 4px;">+0.0200 USDT</div>
+      </div>
+
+      <button class="btn-modal-submit" id="btn-claim-gift-reward" style="background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%); color: #fff; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);">
+        <span>Claim Free Coins & USDT</span>
+      </button>
+    </div>
+  </div>
+
   <!-- Toast Notification Container (Top Floating Pill Popup) -->
   <div class="toast-container" id="toast-container"></div>
 
@@ -1397,6 +1530,7 @@
   <script src="/js/tasks.js"></script>
   <script src="/js/referral.js"></script>
   <script src="/js/wallet.js"></script>
+  <script src="/js/giftbox.js"></script>
   <script src="/js/modals.js"></script>
   <script src="/js/liveWithdrawals.js"></script>
   <script src="/js/app.js"></script>

@@ -2205,3 +2205,289 @@
   height: 17px;
 }
 
+/* ==========================================================================
+   GiftBox Page Styles (Matching 2nd Reference Image)
+   ========================================================================== */
+.giftbox-page {
+  padding: 16px 16px 90px 16px;
+  min-height: 100vh;
+}
+
+.giftbox-top-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 22px;
+  padding: 6px 0 10px 0;
+}
+
+.giftbox-back-btn {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.giftbox-back-btn:hover {
+  transform: translateX(-3px);
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.giftbox-back-btn:active {
+  transform: scale(0.93);
+}
+
+.giftbox-back-btn svg {
+  width: 24px;
+  height: 24px;
+  stroke: var(--text-primary);
+}
+
+.giftbox-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.giftbox-heading {
+  font-size: 23px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  color: var(--text-primary);
+  line-height: 1.15;
+  margin: 0;
+}
+
+.giftbox-subheading {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin: 0;
+}
+
+/* 2-Column Grid matching Screenshot */
+.giftbox-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 330px) {
+  .giftbox-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.giftbox-card {
+  background: #FFFFFF;
+  border-radius: 22px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s ease;
+}
+
+[data-theme="dark"] .giftbox-card {
+  background: #0f172a;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+
+.giftbox-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 30px rgba(124, 58, 237, 0.18);
+}
+
+.giftbox-card:active {
+  transform: scale(0.96);
+}
+
+/* Diagonal Ribbon Badge at Top Right */
+.gift-corner-ribbon {
+  position: absolute;
+  top: 15px;
+  right: -28px;
+  transform: rotate(45deg);
+  background: linear-gradient(135deg, #7C3AED 0%, #6366F1 100%);
+  color: #FFFFFF;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  padding: 4px 34px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.4);
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Card Header Title */
+.gift-card-header {
+  padding: 16px 14px 4px 14px;
+}
+
+.gift-card-title {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.3px;
+  margin: 0;
+}
+
+.btc-theme .gift-card-title {
+  color: #D97706;
+}
+
+[data-theme="dark"] .btc-theme .gift-card-title {
+  color: #FBBF24;
+}
+
+.eth-theme .gift-card-title {
+  color: #2563EB;
+}
+
+[data-theme="dark"] .eth-theme .gift-card-title {
+  color: #60A5FA;
+}
+
+.gram-theme .gift-card-title {
+  color: #0284C7;
+}
+
+[data-theme="dark"] .gram-theme .gift-card-title {
+  color: #38BDF8;
+}
+
+/* Artwork image container */
+.gift-art-wrap {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+}
+
+.gift-art-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.08));
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.giftbox-card:hover .gift-art-img {
+  transform: scale(1.08);
+}
+
+/* Footer Tag Badges */
+.gift-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 10px 12px 10px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="dark"] .gift-card-footer {
+  border-top-color: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.gift-tag-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+}
+
+[data-theme="dark"] .gift-tag-item {
+  color: #94A3B8;
+}
+
+.gift-tag-icon {
+  font-size: 12px;
+}
+
+.gift-tag-item.usdt .gift-tag-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #10B981;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* Gift Reveal Modal Animation */
+.gift-modal-preview-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 0 20px 0;
+  text-align: center;
+}
+
+.gift-modal-img {
+  width: 140px;
+  height: 140px;
+  object-fit: contain;
+  margin-bottom: 14px;
+  animation: giftBounce 2s infinite ease-in-out;
+  filter: drop-shadow(0 8px 24px rgba(124, 58, 237, 0.3));
+}
+
+@keyframes giftBounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-8px) scale(1.04); }
+}
+
+.gift-reward-badge {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.12));
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 16px;
+  padding: 12px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.gift-reward-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #10B981;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.gift-reward-val {
+  font-size: 26px;
+  font-weight: 900;
+  color: #10B981;
+  letter-spacing: -0.5px;
+}
+
+

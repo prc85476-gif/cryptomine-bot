@@ -29,6 +29,7 @@ const App = {
     window.TasksModule.init();
     window.ReferralModule?.init();
     window.WalletModule.init();
+    window.GiftBoxModule?.init();
     window.LiveWithdrawalPopup?.init();
 
     console.log('✅ CryptoMine UI ready!');
@@ -170,10 +171,10 @@ const App = {
   switchTab(tabName) {
     window.TelegramService.hapticSelection();
     
-    // Toggle header visibility (hide header on profile page)
+    // Toggle header visibility (hide header on profile page and giftbox page)
     const appHeader = document.querySelector('.app-header');
     if (appHeader) {
-      appHeader.style.display = (tabName === 'profile') ? 'none' : 'flex';
+      appHeader.style.display = (tabName === 'profile' || tabName === 'giftbox') ? 'none' : 'flex';
     }
 
     // Update active nav button
@@ -238,10 +239,10 @@ const App = {
       this.switchTab('tasks');
     });
 
-    // Go Premium / Promo Banner Buttons -> Switch to Referral tab
+    // Go Premium / Promo Banner Buttons -> Switch to Giftbox page
     document.getElementById('btn-home-invite-banner')?.addEventListener('click', () => {
       window.TelegramService.hapticSelection();
-      this.switchTab('referral');
+      this.switchTab('giftbox');
     });
 
     document.getElementById('btn-vip-banner-upgrade')?.addEventListener('click', () => {
