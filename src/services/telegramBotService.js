@@ -701,11 +701,6 @@ ${walletStatus}
    * Broadcast Confirmed Withdrawal to Public Proof Channel (@cryptomintwithdraw)
    */
   async broadcastWithdrawalToProofChannel(data) {
-    if (!this.bot) {
-      console.warn('⚠️ Telegram Admin Bot not ready for channel broadcast.');
-      return;
-    }
-
     const channelId = process.env.PAYOUT_PROOF_CHANNEL || '@cryptomintwithdraw';
     const {
       username,
@@ -753,26 +748,47 @@ ${walletStatus}
 
 🔗 <a href="${cleanBscUrl}">View on BscScan</a>`;
 
-    try {
-      const sent = await this.bot.api.sendMessage({
-        chat_id: channelId,
-        text: channelMessage,
-        parse_mode: 'HTML',
-        disable_web_page_preview: false,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '🔍 View on BscScan', url: cleanBscUrl }
-            ]
+    const msgPayload = {
+      chat_id: channelId,
+      text: channelMessage,
+      parse_mode: 'HTML',
+      disable_web_page_preview: false,
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '🔍 View on BscScan', url: cleanBscUrl }
           ]
-        }
-      });
-      console.log(`📢 Broadcasted confirmed withdrawal to ${channelId} successfully!`);
-      return sent;
-    } catch (err) {
-      console.error(`❌ Failed to post withdrawal proof to ${channelId}:`, err.message);
-      throw err;
+        ]
+      }
+    };
+
+    let sent = null;
+
+    // 1. Try Main Bot (@cryptomintnftbot)
+    try {
+      const mainBotService = require('./mainBotService');
+      if (mainBotService?.bot) {
+        sent = await mainBotService.bot.api.sendMessage(msgPayload);
+        console.log(`📢 [Main Bot] Broadcasted confirmed withdrawal to ${channelId} successfully!`);
+        return sent;
+      }
+    } catch (e) {
+      console.warn(`[Main Bot] Broadcast attempt note: ${e.message}`);
     }
+
+    // 2. Fallback to Admin Bot (@acryptomintadminwithdraw2bot)
+    if (!sent && this.bot) {
+      try {
+        sent = await this.bot.api.sendMessage(msgPayload);
+        console.log(`📢 [Admin Bot] Broadcasted confirmed withdrawal to ${channelId} successfully!`);
+        return sent;
+      } catch (err) {
+        console.error(`❌ Both bots failed to post to ${channelId}:`, err.message);
+        throw err;
+      }
+    }
+
+    return sent;
   }
 }
 
