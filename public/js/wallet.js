@@ -132,17 +132,27 @@ const WalletModule = {
       window.MiningModule.playSuccessSound();
     }
 
-    // 2. Transform Step 2 status card to glowing green confirmed state
+    // 2. Transform Step 2 status card and verify button to glowing green confirmed state
     const liveCard = document.getElementById('deposit-live-status-card');
     const liveTitle = document.getElementById('deposit-status-title');
     const liveDesc = document.getElementById('deposit-status-desc');
     const liveBadge = document.getElementById('deposit-live-badge');
+    const verifyBtn = document.getElementById('btn-verify-deposit');
+    const verifyTextEl = document.getElementById('btn-verify-deposit-text');
 
     const creditAmt = res.baseAmount || this.currentDepositAmount;
     if (liveCard) liveCard.classList.add('confirmed');
     if (liveTitle) liveTitle.textContent = '🎉 Payment Confirmed & Added!';
     if (liveDesc) liveDesc.textContent = `+${parseFloat(creditAmt).toFixed(2)} USDT credited to your balance.`;
     if (liveBadge) liveBadge.innerHTML = '<span class="live-dot"></span><span>CREDITED</span>';
+
+    if (verifyBtn) {
+      verifyBtn.classList.add('btn-verified-success');
+      verifyBtn.disabled = true;
+    }
+    if (verifyTextEl) {
+      verifyTextEl.innerHTML = `<span>✅ Verified & Credited (+${parseFloat(creditAmt).toFixed(2)} USDT)</span>`;
+    }
 
     // 3. Update app state & UI immediately
     const newDepBal = res.depositBalance !== undefined ? res.depositBalance : 0;
@@ -264,6 +274,45 @@ const WalletModule = {
         window.ModalManager.showToast(`Exact amount ${amtStr} USDT copied!`, 'success');
       });
     }
+
+    // Verify Deposit Button Click in Step 2 (Active On-Demand BSC Blockchain Scan)
+    const verifyBtn = document.getElementById('btn-verify-deposit');
+    if (verifyBtn) {
+      verifyBtn.addEventListener('click', async () => {
+        window.TelegramService.hapticImpact('medium');
+        const verifyTextEl = document.getElementById('btn-verify-deposit-text');
+        const origHtml = verifyTextEl ? verifyTextEl.innerHTML : `⚡ I have paid • Verify Deposit (${parseFloat(this.currentDepositAmount).toFixed(2)} USDT)`;
+        
+        verifyBtn.disabled = true;
+        if (verifyTextEl) {
+          verifyTextEl.innerHTML = '<span class="btn-spinner-icon"></span><span>Scanning BSC Blockchain...</span>';
+        }
+
+        try {
+          const res = await window.ApiService.checkDepositStatus();
+          if (res && res.confirmed === true) {
+            if (verifyTextEl) verifyTextEl.innerHTML = '<span>✅ Verified & Credited!</span>';
+            verifyBtn.classList.add('btn-verified-success');
+            this.handleDepositConfirmed(res);
+            return;
+          } else {
+            window.TelegramService.hapticNotification('warning');
+            const amtStr = this.currentExactAmount ? `${this.currentExactAmount} USDT` : `${this.currentDepositAmount} USDT`;
+            window.ModalManager.showToast(`🔍 Scanning BSC... Transfer not found yet. Please make sure exact ${amtStr} was sent to the address.`, 'info');
+          }
+        } catch (err) {
+          console.warn('Manual verify status check error:', err);
+          window.ModalManager.showToast('Network error while scanning BSC. Please try again in a few seconds.', 'error');
+        } finally {
+          setTimeout(() => {
+            if (verifyBtn && !verifyBtn.classList.contains('btn-verified-success')) {
+              verifyBtn.disabled = false;
+              if (verifyTextEl) verifyTextEl.innerHTML = origHtml;
+            }
+          }, 1800);
+        }
+      });
+    }
   },
 
   async goToDepositStep2() {
@@ -275,15 +324,26 @@ const WalletModule = {
 
     const amountNum = parseFloat(this.currentDepositAmount) || 3;
 
-    // Reset live status card
+    // Reset live status card and verify button
     const liveCard = document.getElementById('deposit-live-status-card');
     const liveTitle = document.getElementById('deposit-status-title');
     const liveDesc = document.getElementById('deposit-status-desc');
     const liveBadge = document.getElementById('deposit-live-badge');
+    const verifyBtn = document.getElementById('btn-verify-deposit');
+    const verifyTextEl = document.getElementById('btn-verify-deposit-text');
+
     if (liveCard) liveCard.classList.remove('confirmed');
     if (liveTitle) liveTitle.textContent = 'Waiting for transfer';
     if (liveDesc) liveDesc.textContent = 'We check incoming payments automatically';
     if (liveBadge) liveBadge.innerHTML = '<span class="live-dot"></span><span>LIVE</span>';
+
+    if (verifyBtn) {
+      verifyBtn.disabled = false;
+      verifyBtn.classList.remove('btn-verified-success');
+    }
+    if (verifyTextEl) {
+      verifyTextEl.innerHTML = `<span>⚡ I have paid • Verify Deposit (${amountNum.toFixed(2)} USDT)</span>`;
+    }
 
     // Show loading state on button while registering deposit intent
     if (proceedTopupBtn) {
@@ -324,6 +384,10 @@ const WalletModule = {
     if (payBalEl) payBalEl.textContent = `${amountNum.toFixed(2)} USDT`;
     if (payNetNameEl) payNetNameEl.textContent = this.currentDepositNetwork || 'USDT BEP20';
     if (addrEl) addrEl.textContent = this.depositAddress || '0x91AbcbAbE89945De4e491bf8850Bae836dB66547';
+
+    if (verifyTextEl) {
+      verifyTextEl.innerHTML = `<span>⚡ I have paid • Verify Deposit (${amountNum.toFixed(2)} USDT)</span>`;
+    }
 
     // Update dynamic QR Code
     if (qrImgEl) {
@@ -693,15 +757,38 @@ const WalletModule = {
       if (elWithdrawn) elWithdrawn.textContent = Number(res.totalWithdrawn).toFixed(4);
 
       if (elTxList && res.transactions) {
-        elTxList.innerHTML = res.transactions.map(tx => `
-          <div class="tx-item">
-            <div class="tx-left-col">
-              <span class="tx-name">${tx.type}</span>
-              <span class="tx-time">${tx.date}</span>
-            </div>
-            <span class="tx-amt ${tx.positive ? 'positive' : 'negative'}">${tx.amount}</span>
-          </div>
-        `).join('');
+        if (res.transactions.length === 0) {
+          elTxList.innerHTML = '<div class="tx-empty-state">No transactions yet</div>';
+        } else {
+          elTxList.innerHTML = res.transactions.map(tx => {
+            const hasTxHash = tx.txHash && tx.txHash !== 'N/A' && tx.txHash.length > 10;
+            const bscScanUrl = hasTxHash
+              ? `https://bscscan.com/tx/${tx.txHash}`
+              : `https://bscscan.com/address/0x91AbcbAbE89945De4e491bf8850Bae836dB66547`;
+            
+            return `
+              <div class="tx-item">
+                <div class="tx-left-col">
+                  <div class="tx-title-row">
+                    <span class="tx-name">${tx.type}</span>
+                    <a href="${bscScanUrl}" target="_blank" rel="noopener" class="tx-bscscan-link" onclick="if(window.Telegram?.WebApp?.openLink){window.Telegram.WebApp.openLink('${bscScanUrl}');}else{window.open('${bscScanUrl}', '_blank');}event.stopPropagation();">
+                      <span>BSC Scan</span>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                        <polyline points="15 3 21 3 21 9"></polyline>
+                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                      </svg>
+                    </a>
+                  </div>
+                  <span class="tx-time">${tx.date || 'Just now'} • ${tx.status || 'Completed'}</span>
+                </div>
+                <div class="tx-right-col">
+                  <span class="tx-amt ${tx.positive ? 'positive' : 'negative'}">${tx.amount}</span>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
       }
     }
   }
