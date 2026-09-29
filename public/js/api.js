@@ -92,6 +92,8 @@ const ApiService = {
 
   // Wallet
   getWalletDetails() { return this.get('/wallet/details'); },
+  createDepositIntent(amount, network) { return this.post('/wallet/deposit-intent', { amount, network }); },
+  checkDepositStatus() { return this.get('/wallet/deposit-status'); },
   deposit(amount, network, txHash) { return this.post('/wallet/deposit', { amount, network, txHash }); },
   withdraw(amount, address, network, turnstileToken) { return this.post('/wallet/withdraw', { amount, address, network, turnstileToken }); },
   getReferralInfo() { return this.get('/wallet/referral'); }

@@ -1,6 +1,7 @@
 const dbService = require('../services/dbService');
 const telegramBotService = require('../services/telegramBotService');
 const mainBotService = require('../services/mainBotService');
+const depositWatcherService = require('../services/depositWatcherService');
 
 exports.getWalletDetails = async (req, res) => {
   try {
@@ -20,6 +21,57 @@ exports.getWalletDetails = async (req, res) => {
     });
   } catch (err) {
     console.error('walletController.getWalletDetails error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/**
+ * Register a deposit intent with a deterministic unique decimal amount
+ */
+exports.createDepositIntent = async (req, res) => {
+  try {
+    const { amount, network } = req.body;
+    const baseAmt = parseFloat(amount) || 3.0;
+
+    if (baseAmt <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid deposit amount' });
+    }
+
+    const user = await dbService.getUser(req.userId, req.userMeta);
+    const intent = depositWatcherService.registerIntent({
+      userId: req.userId,
+      telegramId: user.telegramId || req.userId,
+      username: user.username || user.name || 'Miner',
+      baseAmount: baseAmt,
+      network: network || 'USDT BEP20'
+    });
+
+    return res.status(200).json({
+      success: true,
+      exactAmount: intent.exactAmount,
+      baseAmount: intent.baseAmount,
+      network: intent.network,
+      depositAddress: intent.depositAddress,
+      expiresAt: intent.expiresAt
+    });
+  } catch (err) {
+    console.error('walletController.createDepositIntent error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/**
+ * Check if the active deposit intent has arrived and verified on-chain
+ */
+exports.checkDepositStatus = async (req, res) => {
+  try {
+    const status = await depositWatcherService.checkStatus(req.userId);
+    return res.status(200).json({
+      success: true,
+      ...status
+    });
+  } catch (err) {
+    console.error('walletController.checkDepositStatus error:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 };

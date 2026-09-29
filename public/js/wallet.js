@@ -4,8 +4,10 @@
 const WalletModule = {
   currentDepositNetwork: 'USDT BEP20',
   currentDepositAmount: 3,
+  currentExactAmount: '3.0000',
   depositAddress: '0x5201A1A25315Eb9Cd3bcF3f6FEEA5312E1638675',
   currentWithdrawNetwork: 'USDT BEP20',
+  depositPollInterval: null,
 
   init() {
     this.bindEvents();
@@ -42,6 +44,8 @@ const WalletModule = {
   },
 
   openDepositPage() {
+    this.stopDepositPolling();
+
     // Reset all steps to Step 1
     const step1 = document.getElementById('deposit-step-1');
     const step2 = document.getElementById('deposit-step-2');
@@ -84,6 +88,59 @@ const WalletModule = {
     });
 
     window.ModalManager.openModal('modal-deposit');
+  },
+
+  startDepositPolling() {
+    this.stopDepositPolling();
+    this.depositPollInterval = setInterval(async () => {
+      // Only poll if modal-deposit is currently visible and active
+      const modalDep = document.getElementById('modal-deposit');
+      if (!modalDep || !modalDep.classList.contains('active')) {
+        this.stopDepositPolling();
+        return;
+      }
+
+      try {
+        const res = await window.ApiService.checkDepositStatus();
+        if (res && res.confirmed === true) {
+          this.handleDepositConfirmed(res);
+        }
+      } catch (err) {
+        console.warn('Deposit status polling error:', err);
+      }
+    }, 2800); // Check every 2.8 seconds
+  },
+
+  stopDepositPolling() {
+    if (this.depositPollInterval) {
+      clearInterval(this.depositPollInterval);
+      this.depositPollInterval = null;
+    }
+  },
+
+  handleDepositConfirmed(res) {
+    this.stopDepositPolling();
+    window.TelegramService.hapticNotification('success');
+    if (window.MiningModule && window.MiningModule.playSuccessSound) {
+      window.MiningModule.playSuccessSound();
+    }
+
+    const newDepBal = res.depositBalance !== undefined ? res.depositBalance : 0;
+    const newBal = res.newBalance !== undefined ? res.newBalance : 0;
+
+    window.appState.setState({
+      balance: newBal,
+      depositBalance: newDepBal
+    });
+
+    if (window.MiningModule && window.MiningModule.updateBalanceUI) {
+      window.MiningModule.updateBalanceUI(newBal, newDepBal);
+    }
+
+    const amtText = res.baseAmount ? `${res.baseAmount} USDT` : `${this.currentDepositAmount} USDT`;
+    window.ModalManager.showToast(`🎉 Deposit of ${amtText} Confirmed & Added!`, 'success');
+    window.ModalManager.closeModal('modal-deposit');
+    this.loadProfileWalletStats();
   },
 
   bindDepositEvents() {
@@ -144,6 +201,7 @@ const WalletModule = {
     if (backBtn) {
       backBtn.addEventListener('click', () => {
         window.TelegramService.hapticSelection();
+        this.stopDepositPolling();
         const step1 = document.getElementById('deposit-step-1');
         const step2 = document.getElementById('deposit-step-2');
         const step3 = document.getElementById('deposit-step-3');
@@ -175,23 +233,44 @@ const WalletModule = {
       });
     }
 
-    // Copy Amount inline link in Step 2
+    // Copy Exact Amount inline link in Step 2
     const copyAmtBtn = document.getElementById('btn-copy-pay-amount');
     if (copyAmtBtn) {
       copyAmtBtn.addEventListener('click', () => {
-        const amtStr = `${this.currentDepositAmount} USDT`;
+        const amtStr = this.currentExactAmount ? `${this.currentExactAmount}` : `${this.currentDepositAmount}`;
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(amtStr);
         }
         window.TelegramService.hapticNotification('success');
-        window.ModalManager.showToast('Amount copied!', 'success');
+        window.ModalManager.showToast(`Exact amount ${amtStr} USDT copied!`, 'success');
       });
     }
 
-    // Proceed from Step 2 to Step 3 (Verify / Submit TxID)
+    // Proceed from Step 2 to Step 3 (Verify / Submit TxID or instant check)
     const proceedStep3Btn = document.getElementById('btn-proceed-to-step3');
     if (proceedStep3Btn) {
-      proceedStep3Btn.addEventListener('click', () => this.goToDepositStep3());
+      proceedStep3Btn.addEventListener('click', async () => {
+        window.TelegramService.hapticImpact('medium');
+        const origText = proceedStep3Btn.innerHTML;
+        proceedStep3Btn.disabled = true;
+        proceedStep3Btn.innerHTML = '<span>Checking blockchain...</span>';
+
+        try {
+          const res = await window.ApiService.checkDepositStatus();
+          if (res && res.confirmed === true) {
+            this.handleDepositConfirmed(res);
+            return;
+          }
+        } catch (e) {
+          console.warn('Status check error on Proceed:', e);
+        } finally {
+          proceedStep3Btn.disabled = false;
+          proceedStep3Btn.innerHTML = origText;
+        }
+
+        // If not yet confirmed, take user to Step 3
+        this.goToDepositStep3();
+      });
     }
 
     // Back from Step 3 to Step 2
@@ -229,12 +308,42 @@ const WalletModule = {
     }
   },
 
-  goToDepositStep2() {
+  async goToDepositStep2() {
     window.TelegramService.hapticImpact('medium');
 
     const step1 = document.getElementById('deposit-step-1');
     const step2 = document.getElementById('deposit-step-2');
     const step3 = document.getElementById('deposit-step-3');
+    const proceedTopupBtn = document.getElementById('btn-proceed-topup');
+
+    const amountNum = parseFloat(this.currentDepositAmount) || 3;
+
+    // Show loading state on button while generating unique amount intent
+    if (proceedTopupBtn) {
+      proceedTopupBtn.disabled = true;
+      proceedTopupBtn.innerHTML = '<span>Preparing details...</span>';
+    }
+
+    try {
+      const intentRes = await window.ApiService.createDepositIntent(amountNum, this.currentDepositNetwork);
+      if (intentRes && intentRes.success && intentRes.exactAmount) {
+        this.currentExactAmount = intentRes.exactAmount;
+        if (intentRes.depositAddress) this.depositAddress = intentRes.depositAddress;
+      } else {
+        // Deterministic fallback if offline
+        const user = window.TelegramService?.getUser ? window.TelegramService.getUser() : null;
+        const tgIdStr = String(user?.id || '489').slice(-3).padStart(3, '5');
+        this.currentExactAmount = (amountNum + parseFloat('0.0' + tgIdStr)).toFixed(4);
+      }
+    } catch (e) {
+      console.warn('createDepositIntent error:', e);
+      this.currentExactAmount = (amountNum + 0.0148).toFixed(4);
+    } finally {
+      if (proceedTopupBtn) {
+        proceedTopupBtn.disabled = false;
+        proceedTopupBtn.innerHTML = '<span>Top up</span>';
+      }
+    }
 
     // Populate data
     const payAmtEl = document.getElementById('pay-detail-amount');
@@ -244,8 +353,7 @@ const WalletModule = {
     const addrEl = document.getElementById('deposit-crypto-address');
     const qrImgEl = document.getElementById('deposit-qr-image');
 
-    const amountNum = parseFloat(this.currentDepositAmount) || 3;
-    if (payAmtEl) payAmtEl.textContent = `${amountNum} USDT`;
+    if (payAmtEl) payAmtEl.textContent = `${this.currentExactAmount} USDT`;
     if (payBalEl) payBalEl.textContent = `${amountNum.toFixed(2)} USDT`;
     if (payNetNameEl) payNetNameEl.textContent = this.currentDepositNetwork || 'USDT BEP20';
     if (addrEl) addrEl.textContent = this.depositAddress || '0x5201A1A25315Eb9Cd3bcF3f6FEEA5312E1638675';
@@ -294,6 +402,9 @@ const WalletModule = {
       step2.classList.add('active');
       step2.style.display = 'flex';
     }
+
+    // Start automated background polling on Step 2
+    this.startDepositPolling();
   },
 
   goToDepositStep3() {
@@ -350,6 +461,9 @@ const WalletModule = {
       step2.classList.add('active');
       step2.style.display = 'flex';
     }
+
+    // Resume polling
+    this.startDepositPolling();
   },
 
   networkConfigs: {
@@ -559,7 +673,9 @@ const WalletModule = {
       const res = await window.ApiService.deposit(amt, this.currentDepositNetwork, txHash);
       if (res.success) {
         window.TelegramService.hapticNotification('success');
-        window.MiningModule.playSuccessSound();
+        if (window.MiningModule && window.MiningModule.playSuccessSound) {
+          window.MiningModule.playSuccessSound();
+        }
         window.appState.setState({
           balance: res.newBalance,
           depositBalance: res.depositBalance
@@ -633,7 +749,9 @@ const WalletModule = {
       const res = await window.ApiService.withdraw(amt, addr, this.currentWithdrawNetwork, turnstileToken);
       if (res && res.success) {
         window.TelegramService.hapticNotification('success');
-        window.MiningModule.playSuccessSound();
+        if (window.MiningModule && window.MiningModule.playSuccessSound) {
+          window.MiningModule.playSuccessSound();
+        }
         window.ModalManager.showToast(res.message || 'Withdrawal request submitted successfully!', 'success');
         window.appState.setState({ balance: res.newBalance });
         if (window.MiningModule && window.MiningModule.updateBalanceUI) {
