@@ -881,6 +881,62 @@ class DBService {
       throw err;
     }
   }
+
+  /**
+   * Count user withdrawals made today (within the current calendar day UTC)
+   */
+  async getDailyWithdrawalCount(userId) {
+    try {
+      const tgId = Number(userId) || 9482103;
+      const res = await db.query(`
+        SELECT COUNT(*) AS count
+        FROM transactions
+        WHERE user_id = $1
+          AND type ILIKE '%Withdraw%'
+          AND created_at >= (NOW() AT TIME ZONE 'UTC')::date
+      `, [tgId]);
+      return parseInt(res.rows[0]?.count || 0);
+    } catch (err) {
+      console.error('DBService.getDailyWithdrawalCount Error:', err);
+      return 0;
+    }
+  }
+
+  /**
+   * Check if user has purchased a fast mining miner, deposited, or upgraded
+   */
+  async hasFastMiner(userId) {
+    try {
+      const tgId = Number(userId) || 9482103;
+      const userRes = await db.query('SELECT total_deposited, deposit_balance, vip_tier FROM users WHERE telegram_id = $1', [tgId]);
+      const user = userRes.rows[0];
+      if (user && (parseFloat(user.total_deposited || 0) > 0 || (user.vip_tier && user.vip_tier !== 'Standard Tier'))) {
+        return true;
+      }
+
+      const minerRes = await db.query('SELECT purchase_price, level, miner_id, name FROM active_miners WHERE user_id = $1', [tgId]);
+      const miner = minerRes.rows[0];
+      if (miner && (parseFloat(miner.purchase_price || 0) > 0 || parseInt(miner.level || 1) > 1 || (miner.miner_id && miner.miner_id !== '1024') || (miner.name && !miner.name.includes('Cyber Bot #1024')))) {
+        return true;
+      }
+
+      // Check if user has any miner upgrade or NFT purchase transaction
+      const txRes = await db.query(`
+        SELECT id FROM transactions 
+        WHERE user_id = $1 AND (type ILIKE '%Upgrade%' OR type ILIKE '%Purchase%' OR type ILIKE '%Deposit NFT%') 
+        LIMIT 1
+      `, [tgId]);
+      if (txRes.rows.length > 0) {
+        return true;
+      }
+
+      return false;
+    } catch (err) {
+      console.error('DBService.hasFastMiner Error:', err);
+      return false;
+    }
+  }
 }
 
 module.exports = new DBService();
+

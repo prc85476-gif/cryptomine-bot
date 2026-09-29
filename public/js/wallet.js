@@ -776,7 +776,13 @@ const WalletModule = {
         this.loadProfileWalletStats();
       } else {
         const errMsg = res?.message || res?.error || 'Withdrawal failed. Please check details and try again.';
-        window.ModalManager.showToast(errMsg, 'error');
+        if (res?.dailyLimitReached) {
+          window.TelegramService.hapticImpact('medium');
+          window.ModalManager.showToast(errMsg, 'warning');
+        } else {
+          window.TelegramService.hapticNotification('error');
+          window.ModalManager.showToast(errMsg, 'error');
+        }
       }
     } catch (err) {
       console.error('Withdraw error:', err);

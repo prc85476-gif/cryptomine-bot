@@ -176,6 +176,25 @@ exports.withdraw = async (req, res) => {
       });
     }
 
+    // Daily Withdrawal Limit check (Free/Starter: 2 times daily. Fast Miner/Purchased: 5 times daily)
+    const isFastMiner = await dbService.hasFastMiner(req.userId);
+    const dailyLimit = isFastMiner ? 5 : 2;
+    const todayCount = await dbService.getDailyWithdrawalCount(req.userId);
+
+    if (todayCount >= dailyLimit) {
+      const limitMsg = isFastMiner
+        ? `Daily withdrawal limit reached (${dailyLimit}/${dailyLimit} times). You have used all 5 daily withdrawals for today.`
+        : `Daily limit reached (${dailyLimit}/${dailyLimit} times). Purchase a fast mining NFT to increase your daily withdrawal limit to 5 times!`;
+
+      return res.status(400).json({
+        success: false,
+        dailyLimitReached: true,
+        currentCount: todayCount,
+        maxLimit: dailyLimit,
+        message: limitMsg
+      });
+    }
+
     // Cloudflare Turnstile Verification (if provided)
     if (turnstileToken) {
       try {
