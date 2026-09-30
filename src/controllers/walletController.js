@@ -7,6 +7,7 @@ exports.getWalletDetails = async (req, res) => {
   try {
     const user = await dbService.getUser(req.userId, req.userMeta);
     const transactions = await dbService.getTransactions(req.userId, 50);
+    const hasFastMiner = await dbService.hasFastMiner(req.userId);
 
     return res.status(200).json({
       success: true,
@@ -17,6 +18,7 @@ exports.getWalletDetails = async (req, res) => {
       totalWithdrawn: user.totalWithdrawn,
       totalDeposited: user.totalDeposited,
       walletAddress: user.walletAddress,
+      hasFastMiner: hasFastMiner,
       transactions: transactions
     });
   } catch (err) {
@@ -169,15 +171,31 @@ exports.withdraw = async (req, res) => {
       });
     }
 
-    if (!address || address.length < 5) {
+    const trimmedAddress = (address || '').trim();
+    if (!trimmedAddress || trimmedAddress.length < 5) {
       return res.status(400).json({
         success: false,
         message: "Please enter a valid crypto withdrawal address"
       });
     }
 
+    const currentSavedAddr = (user.walletAddress && !user.walletAddress.includes('...')) ? user.walletAddress.trim() : null;
+
     // Daily Withdrawal Limit check (Free/Starter: 2 times daily. Fast Miner/Purchased: 5 times daily)
     const isFastMiner = await dbService.hasFastMiner(req.userId);
+
+    // Rule: If an address was already saved and the user attempts to enter a different address:
+    // Only users with an active purchased miner / deposit / fast plan are allowed to change withdrawal address!
+    if (currentSavedAddr && currentSavedAddr.toLowerCase() !== trimmedAddress.toLowerCase()) {
+      if (!isFastMiner) {
+        return res.status(400).json({
+          success: false,
+          requiresPlan: true,
+          message: "To change your withdrawal wallet address, you must purchase a mining plan."
+        });
+      }
+    }
+
     const dailyLimit = isFastMiner ? 5 : 2;
     const todayCount = await dbService.getDailyWithdrawalCount(req.userId);
 
@@ -219,11 +237,16 @@ exports.withdraw = async (req, res) => {
     const newBalance = parseFloat((user.balance - withdrawAmt).toFixed(4));
     const newTotalWithdrawn = parseFloat((user.totalWithdrawn + withdrawAmt).toFixed(4));
 
-    // Update in Neon Database
-    await dbService.updateUser(req.userId, {
+    // Update in Neon Database (balance, totalWithdrawn, and save/update walletAddress if new or permitted change)
+    const userUpdates = {
       balance: newBalance,
       totalWithdrawn: newTotalWithdrawn
-    });
+    };
+    if (!currentSavedAddr || currentSavedAddr.toLowerCase() !== trimmedAddress.toLowerCase()) {
+      userUpdates.walletAddress = trimmedAddress;
+    }
+
+    await dbService.updateUser(req.userId, userUpdates);
 
     // Add Pending Transaction in Neon Database
     await dbService.addTransaction({
@@ -231,7 +254,7 @@ exports.withdraw = async (req, res) => {
       userId: req.userId,
       type: `Withdraw (${selectedNet})`,
       amount: `-${withdrawAmt.toFixed(4)} USDT`,
-      recipientAddress: address,
+      recipientAddress: trimmedAddress,
       network: selectedNet,
       status: "Pending",
       positive: false,
@@ -241,16 +264,39 @@ exports.withdraw = async (req, res) => {
     // 1. Send instant 1-line notification to the USER's Telegram
     mainBotService.notifyUserWithdrawalPending(user.telegramId, withdrawAmt).catch(() => {});
 
-    // 2. Notify Telegram Admin Bot with Approve / Reject action & Ban button
+    // Gather full user profile & stats for admin withdrawal request alert
+    const [activeMiner, purchasedNFTs, referrals] = await Promise.all([
+      dbService.getActiveMiner(req.userId).catch(() => null),
+      dbService.getUserPurchasedNFTs(req.userId).catch(() => []),
+      dbService.getReferrals(req.userId).catch(() => [])
+    ]);
+
+    const activeMinersCount = purchasedNFTs.length > 0 
+      ? (new Set(purchasedNFTs.map(id => String(id).replace('nft-', '')))).size
+      : 1;
+
+    const totalBalance = parseFloat((newBalance + (user.depositBalance || 0)).toFixed(4));
+
+    // 2. Notify Telegram Admin Bot with full user details & Approve / Reject action & Ban button
     telegramBotService.notifyWithdrawalRequest({
       txId,
       userId: user.telegramId,
       username: user.username,
+      name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Miner',
       amount: withdrawAmt,
       fee,
       finalReceived,
-      address,
-      network: selectedNet
+      address: trimmedAddress,
+      network: selectedNet,
+      mainBalance: newBalance,
+      depositBalance: user.depositBalance || 0,
+      totalBalance: totalBalance,
+      totalWithdrawn: newTotalWithdrawn,
+      totalDeposited: user.totalDeposited || 0,
+      totalReferrals: referrals.length,
+      activeMinersCount: activeMinersCount,
+      minerName: activeMiner?.name || 'Cyber Bot #1024',
+      miningRate: user.miningRate || activeMiner?.dailyReward || 0.0200
     }).catch((botErr) => {
       console.warn('Could not dispatch Telegram alert:', botErr.message);
     });
@@ -260,6 +306,8 @@ exports.withdraw = async (req, res) => {
       message: `Withdrawal of ${withdrawAmt.toFixed(4)} USDT submitted! Sent to admin for approval. Net receiving: ${finalReceived.toFixed(4)} USDT.`,
       newBalance: newBalance,
       totalWithdrawn: newTotalWithdrawn,
+      walletAddress: trimmedAddress,
+      hasFastMiner: isFastMiner,
       txId
     });
   } catch (err) {

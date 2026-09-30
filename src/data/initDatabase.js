@@ -23,7 +23,7 @@ async function initDatabase() {
         referrer_id BIGINT,
         vip_tier VARCHAR(50) DEFAULT 'Standard Tier',
         vip_power_multiplier NUMERIC(5, 2) DEFAULT 1.00,
-        wallet_address VARCHAR(255) DEFAULT 'EQB...89xY (TON Space)',
+        wallet_address VARCHAR(255) DEFAULT NULL,
         avatar VARCHAR(500) DEFAULT '/assets/images/nft/miner-robot.png',
         is_banned BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -31,9 +31,18 @@ async function initDatabase() {
       );
     `);
 
-    // Ensure is_banned column exists for existing tables
+    // Clean legacy dummy placeholder wallet addresses if any exist
+    await db.query(`
+      UPDATE users SET wallet_address = NULL 
+      WHERE wallet_address LIKE '%EQB...%' OR wallet_address LIKE '%TON Space%';
+    `).catch(() => {});
+
+    // Ensure is_banned & gift box columns exist for existing tables
     await db.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS gift_boxes_available INT DEFAULT 2;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS gift_boxes_opened INT DEFAULT 0;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_speed_bonus NUMERIC(18, 4) DEFAULT 0.0000;
     `);
 
     // 2. Active Miners Table (Free Starter Miner: 0.02 USDT/day for 20 days)
@@ -116,6 +125,20 @@ async function initDatabase() {
       );
     `);
 
+    // 6. User Purchased Miners Table (Tracks purchased NFT miners/plans to prevent duplicate purchases)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS user_purchased_miners (
+        id SERIAL PRIMARY KEY,
+        user_id BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
+        nft_id VARCHAR(100) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        price NUMERIC(18, 4) NOT NULL,
+        daily_reward NUMERIC(18, 4) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        CONSTRAINT unique_user_nft UNIQUE (user_id, nft_id)
+      );
+    `);
+
     // Check if default test/admin user exists, if not seed initial record
     const userCheck = await db.query('SELECT * FROM users WHERE telegram_id = $1', [9482103]);
     if (userCheck.rows.length === 0) {
@@ -129,7 +152,7 @@ async function initDatabase() {
           9482103, 'cryptominer_pro', 'Alex', 'Miner',
           25.4867, 30.0000, 4.8200, 14.4630,
           12.0000, 0.0000, 0.0200, 'CRYPTO-9482',
-          'Standard Tier', 1.00, 'EQB...89xY (TON Space)', '/assets/images/nft/miner-robot.png', false
+          'Standard Tier', 1.00, NULL, '/assets/images/nft/miner-robot.png', false
         );
       `);
     }
@@ -139,7 +162,7 @@ async function initDatabase() {
       SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id), 1) FROM users));
     `);
 
-    // Seed Active Miner if not exists (Free Starter Miner: 0.02 USDT/day for 20 days)
+    // Seed Active Miner if not exists (Free Starter Mining: 0.02 USDT/day for 10 days = 0.20 USDT total)
     const minerCheck = await db.query('SELECT * FROM active_miners WHERE user_id = $1', [9482103]);
     if (minerCheck.rows.length === 0) {
       await db.query(`
@@ -149,9 +172,9 @@ async function initDatabase() {
           mining_days, days_completed, power_hashrate, upgrade_cost,
           next_level, next_level_reward, next_level_hashrate, image, cycle_start_time
         ) VALUES (
-          9482103, '1024', 'Cyber Bot #1024', 1, 'Common', 'Active',
-          0.0000, 0.0200, 0.0000, 0.0000, 0.4000,
-          20, 0, '50 MH/s', 0.5000,
+          9482103, 'starter', 'Free Starter Miner', 1, 'Common', 'Active',
+          0.0000, 0.0200, 0.0000, 0.0000, 0.2000,
+          10, 0, '50 MH/s', 0.5000,
           2, 0.0500, '100 MH/s', '/assets/images/nft/miner-robot.png', $1
         );
       `, [Date.now()]);

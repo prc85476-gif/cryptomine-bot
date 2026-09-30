@@ -69,6 +69,13 @@ class DBService {
             commissionEarned: 0.00
           });
 
+          // Award +1 Mystery Gift Box to referrer
+          await db.query(`
+            UPDATE users 
+            SET gift_boxes_available = COALESCE(gift_boxes_available, 0) + 1 
+            WHERE telegram_id = $1;
+          `, [effectiveReferrerId]);
+
           try {
             const mainBotService = require('./mainBotService');
             if (mainBotService?.notifyReferrerNewUser) {
@@ -104,12 +111,14 @@ class DBService {
           telegram_id, username, first_name, last_name,
           balance, deposit_balance, ton_balance, total_earned,
           total_withdrawn, total_deposited, mining_rate, referral_code,
-          referrer_id, vip_tier, vip_power_multiplier, wallet_address, avatar, is_banned
+          referrer_id, vip_tier, vip_power_multiplier, wallet_address, avatar, is_banned,
+          gift_boxes_available, gift_boxes_opened, daily_speed_bonus
         ) VALUES (
           $1, $2, $3, $4,
           25.4867, 30.0000, 4.8200, 14.4630,
           12.0000, 0.0000, 0.0200, $5,
-          $6, 'Standard Tier', 1.00, 'EQB...89xY (TON Space)', $7, false
+          $6, 'Standard Tier', 1.00, null, $7, false,
+          1, 0, 0.0000
         ) RETURNING *;
       `, [
         tgId,
@@ -121,7 +130,7 @@ class DBService {
         avatar
       ]);
 
-      // Initialize default active miner for this user (Free Starter Miner: 0.02 USDT/day for 20 days)
+      // Initialize default active miner for this user (Free Starter Mining: 0.02 USDT/day for 10 days = 0.20 USDT total)
       await db.query(`
         INSERT INTO active_miners (
           user_id, miner_id, name, level, rarity, status,
@@ -129,9 +138,9 @@ class DBService {
           mining_days, days_completed, power_hashrate, upgrade_cost,
           next_level, next_level_reward, next_level_hashrate, image, cycle_start_time
         ) VALUES (
-          $1, '1024', 'Cyber Bot #1024', 1, 'Common', 'Active',
-          0.0000, 0.0200, 0.0000, 0.0000, 0.4000,
-          20, 0, '50 MH/s', 0.5000,
+          $1, 'starter', 'Free Starter Miner', 1, 'Common', 'Active',
+          0.0000, 0.0200, 0.0000, 0.0000, 0.2000,
+          10, 0, '50 MH/s', 0.5000,
           2, 0.0500, '100 MH/s', '/assets/images/nft/miner-robot.png', $2
         ) ON CONFLICT (user_id) DO NOTHING;
       `, [tgId, Date.now()]);
@@ -145,7 +154,7 @@ class DBService {
         ) ON CONFLICT (user_id) DO NOTHING;
       `, [tgId]);
 
-      // If registered with referrer, record referral link and notify referrer
+      // If registered with referrer, record referral link, award +1 box, and notify referrer
       if (effectiveReferrerId && effectiveReferrerId !== tgId) {
         await this.addReferral(effectiveReferrerId, {
           referredId: tgId,
@@ -154,6 +163,13 @@ class DBService {
           level: 1,
           commissionEarned: 0.00
         });
+
+        // Award +1 Mystery Gift Box to referrer
+        await db.query(`
+          UPDATE users 
+          SET gift_boxes_available = COALESCE(gift_boxes_available, 0) + 1 
+          WHERE telegram_id = $1;
+        `, [effectiveReferrerId]);
 
         try {
           const mainBotService = require('./mainBotService');
@@ -186,11 +202,14 @@ class DBService {
       totalWithdrawn: parseFloat(row.total_withdrawn || 0),
       totalDeposited: parseFloat(row.total_deposited || 0),
       miningRate: parseFloat(row.mining_rate || 0.0200),
+      giftBoxesAvailable: parseInt(row.gift_boxes_available !== undefined && row.gift_boxes_available !== null ? row.gift_boxes_available : 0),
+      giftBoxesOpened: parseInt(row.gift_boxes_opened || 0),
+      dailySpeedBonus: parseFloat(row.daily_speed_bonus || 0.0000),
       referralCode: row.referral_code || 'CRYPTO-9482',
       referrerId: row.referrer_id,
       vipTier: row.vip_tier || 'Standard Tier',
       vipPowerMultiplier: parseFloat(row.vip_power_multiplier || 1.0),
-      walletAddress: row.wallet_address || 'EQB...89xY (TON Space)',
+      walletAddress: (row.wallet_address && !row.wallet_address.includes('...')) ? row.wallet_address : null,
       avatar: row.avatar || '/assets/images/nft/miner-robot.png',
       isBanned: row.is_banned === true,
       isMiningActive: true
@@ -274,7 +293,10 @@ class DBService {
         lastName: 'last_name',
         avatar: 'avatar',
         referralCode: 'referral_code',
-        isBanned: 'is_banned'
+        isBanned: 'is_banned',
+        giftBoxesAvailable: 'gift_boxes_available',
+        giftBoxesOpened: 'gift_boxes_opened',
+        dailySpeedBonus: 'daily_speed_bonus'
       };
 
       const setClauses = [];
@@ -324,7 +346,7 @@ class DBService {
         return this.formatMiner(res.rows[0]);
       }
 
-      // Default miner if not present (Free Starter Miner: 0.02 USDT/day for 20 days)
+      // Default miner if not present (Free Starter Mining: 0.02 USDT/day for 10 days = 0.20 USDT total)
       const newMiner = await db.query(`
         INSERT INTO active_miners (
           user_id, miner_id, name, level, rarity, status,
@@ -332,9 +354,9 @@ class DBService {
           mining_days, days_completed, power_hashrate, upgrade_cost,
           next_level, next_level_reward, next_level_hashrate, image, cycle_start_time
         ) VALUES (
-          $1, '1024', 'Cyber Bot #1024', 1, 'Common', 'Active',
-          0.0000, 0.0200, 0.0000, 0.0000, 0.4000,
-          20, 0, '50 MH/s', 0.5000,
+          $1, 'starter', 'Free Starter Miner', 1, 'Common', 'Active',
+          0.0000, 0.0200, 0.0000, 0.0000, 0.2000,
+          10, 0, '50 MH/s', 0.5000,
           2, 0.0500, '100 MH/s', '/assets/images/nft/miner-robot.png', $2
         ) RETURNING *;
       `, [tgId, Date.now()]);
@@ -349,8 +371,8 @@ class DBService {
   formatMiner(row) {
     if (!row) return null;
     return {
-      id: row.miner_id || '1024',
-      name: row.name || 'Cyber Bot #1024',
+      id: row.miner_id || 'starter',
+      name: row.name || 'Free Starter Miner',
       level: parseInt(row.level || 1),
       rarity: row.rarity || 'Common',
       status: row.status || 'Active',
@@ -358,8 +380,8 @@ class DBService {
       dailyReward: parseFloat(row.daily_reward !== null && row.daily_reward !== undefined ? row.daily_reward : 0.0200),
       totalReward: parseFloat(row.total_reward !== null && row.total_reward !== undefined ? row.total_reward : 0.0000),
       totalClaim: parseFloat(row.total_claim !== null && row.total_claim !== undefined ? row.total_claim : 0.0000),
-      maxReward: parseFloat(row.max_reward || 0.4000),
-      miningDays: parseInt(row.mining_days || 20),
+      maxReward: parseFloat(row.max_reward || 0.2000),
+      miningDays: parseInt(row.mining_days || 10),
       daysCompleted: parseInt(row.days_completed || 0),
       powerHashrate: row.power_hashrate || '50 MH/s',
       upgradeCost: parseFloat(row.upgrade_cost || 0.50),
@@ -651,13 +673,12 @@ class DBService {
   }
 
   /**
-   * Distribute 3-Tier Referral Commissions (Tier 1: 10%, Tier 2: 5%, Tier 3: 2%)
+   * Distribute Referral Commission:
+   * Level 1 (Direct Referrer) receives a flat 0.02$ (+0.0200 USDT) directly to their main withdraw balance.
+   * Level 2 and Level 3 receive 0$ (visual UI display only).
    */
-  async distributeReferralCommission(userId, sourceAmount, sourceAction = 'Activity') {
+  async distributeReferralCommission(userId, sourceAmount, sourceAction = 'Deposit') {
     try {
-      const amt = parseFloat(sourceAmount);
-      if (!amt || isNaN(amt) || amt <= 0) return;
-
       // 1. Get user and their direct referrer (Tier 1)
       const uRes = await db.query('SELECT telegram_id, username, first_name, referrer_id FROM users WHERE telegram_id = $1', [Number(userId)]);
       if (uRes.rows.length === 0 || !uRes.rows[0].referrer_id) return;
@@ -665,9 +686,9 @@ class DBService {
       const actor = uRes.rows[0];
       const tier1Id = actor.referrer_id;
 
-      // Tier 1 Commission (10%)
-      const comm1 = parseFloat((amt * 0.10).toFixed(4));
-      if (comm1 > 0 && tier1Id) {
+      // Tier 1 direct referrer gets flat 0.02$ (0.0200 USDT) added to their main withdrawable balance
+      const comm1 = 0.0200;
+      if (tier1Id) {
         await db.query(`
           UPDATE users 
           SET balance = balance + $1, total_earned = total_earned + $1 
@@ -701,93 +722,9 @@ class DBService {
             mainBotService.notifyReferrerCommission(tier1Id, comm1, 1, sourceAction);
           }
         } catch (e) {}
-
-        // 2. Check Tier 2 Referrer (5%)
-        const t1Res = await db.query('SELECT referrer_id FROM users WHERE telegram_id = $1', [tier1Id]);
-        const tier2Id = t1Res.rows[0]?.referrer_id;
-
-        if (tier2Id && tier2Id !== actor.telegram_id) {
-          const comm2 = parseFloat((amt * 0.05).toFixed(4));
-          if (comm2 > 0) {
-            await db.query(`
-              UPDATE users 
-              SET balance = balance + $1, total_earned = total_earned + $1 
-              WHERE telegram_id = $2;
-            `, [comm2, tier2Id]);
-
-            await this.addReferral(tier2Id, {
-              referredId: actor.telegram_id,
-              username: actor.username,
-              firstName: actor.first_name,
-              level: 2,
-              commissionEarned: comm2
-            });
-
-            await this.addTransaction({
-              id: `tx-ref2-${Date.now()}-${Math.floor(Math.random()*1000)}`,
-              userId: tier2Id,
-              type: `Referral Commission (Tier 2 - ${sourceAction})`,
-              amount: `+${comm2.toFixed(4)} USDT`,
-              txHash: `ref_t2_${actor.telegram_id}_${Date.now()}`,
-              recipientAddress: actor.username ? `@${actor.username}` : `User #${actor.telegram_id}`,
-              network: 'CryptoMine Network',
-              status: 'Completed',
-              positive: true,
-              date: 'Just now'
-            });
-
-            try {
-              const mainBotService = require('./mainBotService');
-              if (mainBotService?.notifyReferrerCommission) {
-                mainBotService.notifyReferrerCommission(tier2Id, comm2, 2, sourceAction);
-              }
-            } catch (e) {}
-
-            // 3. Check Tier 3 Referrer (2%)
-            const t2Res = await db.query('SELECT referrer_id FROM users WHERE telegram_id = $1', [tier2Id]);
-            const tier3Id = t2Res.rows[0]?.referrer_id;
-
-            if (tier3Id && tier3Id !== actor.telegram_id && tier3Id !== tier1Id) {
-              const comm3 = parseFloat((amt * 0.02).toFixed(4));
-              if (comm3 > 0) {
-                await db.query(`
-                  UPDATE users 
-                  SET balance = balance + $1, total_earned = total_earned + $1 
-                  WHERE telegram_id = $2;
-                `, [comm3, tier3Id]);
-
-                await this.addReferral(tier3Id, {
-                  referredId: actor.telegram_id,
-                  username: actor.username,
-                  firstName: actor.first_name,
-                  level: 3,
-                  commissionEarned: comm3
-                });
-
-                await this.addTransaction({
-                  id: `tx-ref3-${Date.now()}-${Math.floor(Math.random()*1000)}`,
-                  userId: tier3Id,
-                  type: `Referral Commission (Tier 3 - ${sourceAction})`,
-                  amount: `+${comm3.toFixed(4)} USDT`,
-                  txHash: `ref_t3_${actor.telegram_id}_${Date.now()}`,
-                  recipientAddress: actor.username ? `@${actor.username}` : `User #${actor.telegram_id}`,
-                  network: 'CryptoMine Network',
-                  status: 'Completed',
-                  positive: true,
-                  date: 'Just now'
-                });
-
-                try {
-                  const mainBotService = require('./mainBotService');
-                  if (mainBotService?.notifyReferrerCommission) {
-                    mainBotService.notifyReferrerCommission(tier3Id, comm3, 3, sourceAction);
-                  }
-                } catch (e) {}
-              }
-            }
-          }
-        }
       }
+
+      // Tier 2 and Tier 3 receive 0$ as per requirement (visual display only on frontend)
     } catch (err) {
       console.error('DBService.distributeReferralCommission error:', err);
     }
@@ -916,7 +853,7 @@ class DBService {
 
       const minerRes = await db.query('SELECT purchase_price, level, miner_id, name FROM active_miners WHERE user_id = $1', [tgId]);
       const miner = minerRes.rows[0];
-      if (miner && (parseFloat(miner.purchase_price || 0) > 0 || parseInt(miner.level || 1) > 1 || (miner.miner_id && miner.miner_id !== '1024') || (miner.name && !miner.name.includes('Cyber Bot #1024')))) {
+      if (miner && (parseFloat(miner.purchase_price || 0) > 0 || parseInt(miner.level || 1) > 1 || (miner.miner_id && miner.miner_id !== 'starter' && miner.miner_id !== '100') || (miner.name && !miner.name.includes('Starter')))) {
         return true;
       }
 
@@ -934,6 +871,347 @@ class DBService {
     } catch (err) {
       console.error('DBService.hasFastMiner Error:', err);
       return false;
+    }
+  }
+
+  /**
+   * Claim a Mystery Gift Box with Starter, Milestone & Tiered Daily Boost rules:
+   * - 1st Starter Box (for new users) = +0.0100 USDT / day (0.01$ added to daily rate)
+   * - Milestone 10th, 20th, 30th, ... box = +0.0100 USDT / day (0.01$ added to daily rate)
+   * - 2% Speed Boost = +0.0010 USDT / day
+   * - 5% Speed Boost = +0.0020 USDT / day
+   * - 20% Speed Boost = +0.0050 USDT / day (available when 20+ boxes opened)
+   */
+  async claimGiftBox(userId = 9482103, options = {}) {
+    try {
+      const tgId = Number(userId) || 9482103;
+      const user = await this.getUser(tgId);
+
+      const available = parseInt(user.giftBoxesAvailable !== undefined && user.giftBoxesAvailable !== null ? user.giftBoxesAvailable : 0);
+      if (available <= 0) {
+        throw new Error('No gift boxes available! Refer a friend to get +1 mystery gift box.');
+      }
+
+      const openedSoFar = parseInt(user.giftBoxesOpened || 0);
+      const currentBoxNumber = openedSoFar + 1; // 1-based index of this opened box
+      const isFirstBox = (openedSoFar === 0);
+      const isMilestone = (!isFirstBox && currentBoxNumber % 10 === 0);
+
+      let boostPercent = 2;
+      let dailyAddAmount = 0.0010;
+      let rewardTitle = '+2% Mining Speed Boost';
+      let isMilestoneReward = false;
+      let isStarterReward = false;
+
+      if (isFirstBox) {
+        // 1st Starter Box for new user -> 0.01$ daily reward
+        isStarterReward = true;
+        boostPercent = 50;
+        dailyAddAmount = 0.0100;
+        rewardTitle = '+0.01$ Starter Welcome Gift';
+      } else if (isMilestone) {
+        // 10th, 20th, 30th, 40th etc. Milestone Box -> 0.01$ daily reward
+        isMilestoneReward = true;
+        boostPercent = 50;
+        dailyAddAmount = 0.0100;
+        rewardTitle = `🎉 Mega Milestone Box #${currentBoxNumber} (+0.010$ Daily Boost)`;
+      } else if (openedSoFar >= 20) {
+        // When 20+ boxes opened, eligible for 20% (+0.005$), 5% (+0.002$), or 2% (+0.001$)
+        const rolls = [
+          { percent: 20, add: 0.0050 },
+          { percent: 5,  add: 0.0020 },
+          { percent: 2,  add: 0.0010 },
+          { percent: 20, add: 0.0050 }
+        ];
+        const picked = rolls[Math.floor(Math.random() * rolls.length)];
+        boostPercent = picked.percent;
+        dailyAddAmount = picked.add;
+        rewardTitle = `+${boostPercent}% Mining Speed Boost`;
+      } else {
+        // Normal boxes (2 to 9, etc.): 2% (+0.001$) or 5% (+0.002$)
+        const rolls = [
+          { percent: 2, add: 0.0010 },
+          { percent: 2, add: 0.0010 },
+          { percent: 5, add: 0.0020 },
+          { percent: 5, add: 0.0020 },
+          { percent: 2, add: 0.0010 }
+        ];
+        const picked = rolls[Math.floor(Math.random() * rolls.length)];
+        boostPercent = picked.percent;
+        dailyAddAmount = picked.add;
+        rewardTitle = `+${boostPercent}% Mining Speed Boost`;
+      }
+
+      const giftType = options.giftType || 'USDT';
+
+      // Calculate new mining rate by adding dailyAddAmount directly to mining rate
+      const currentRate = parseFloat(user.miningRate || 0.0200);
+      const newMiningRate = parseFloat((currentRate + dailyAddAmount).toFixed(6));
+      const newAvailable = Math.max(0, available - 1);
+      const newOpened = openedSoFar + 1;
+
+      // Update user in Neon database
+      const updateRes = await db.query(`
+        UPDATE users
+        SET gift_boxes_available = $1,
+            gift_boxes_opened = $2,
+            mining_rate = $3,
+            daily_speed_bonus = COALESCE(daily_speed_bonus, 0) + $4,
+            updated_at = NOW()
+        WHERE telegram_id = $5
+        RETURNING *;
+      `, [newAvailable, newOpened, newMiningRate, dailyAddAmount, tgId]);
+
+      // Update active miner daily reward as well
+      try {
+        await db.query(`
+          UPDATE active_miners
+          SET daily_reward = daily_reward + $1,
+              updated_at = NOW()
+          WHERE user_id = $2;
+        `, [dailyAddAmount, tgId]);
+      } catch (minerErr) {
+        console.warn('Active miner boost update warning:', minerErr.message);
+      }
+
+      // Add transaction history record
+      await this.addTransaction({
+        id: `tx-gift-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        userId: tgId,
+        type: isStarterReward 
+          ? `Welcome Starter Gift (+0.010$/day)` 
+          : (isMilestoneReward ? `Milestone Gift Box #${newOpened} (+0.010$/day)` : `Mystery Gift Box (+${boostPercent}% Speed Boost)`),
+        amount: (isStarterReward || isMilestoneReward) ? `+0.010 USDT/day` : `+${boostPercent}% Boost`,
+        status: 'Completed',
+        positive: true,
+        date: 'Just now'
+      });
+
+      const updatedUser = updateRes.rows.length > 0 ? this.formatUser(updateRes.rows[0]) : user;
+      const updatedMiner = await this.getActiveMiner(tgId);
+
+      return {
+        success: true,
+        message: isStarterReward 
+          ? `🎉 Welcome Starter Box Claimed! +0.01$ Daily Mining Rate Added!` 
+          : (isMilestoneReward ? `🎉 Milestone Box #${newOpened}! +0.01$ Daily Mining Rate Added!` : `⚡ Congratulations! +${boostPercent}% Mining Speed Boost Activated!`),
+        speedBoost: boostPercent,
+        dailyAddAmount: dailyAddAmount,
+        rewardTitle,
+        isFirstBox: isStarterReward,
+        isMilestone: isMilestoneReward,
+        boxNumber: newOpened,
+        giftType,
+        giftBoxesAvailable: newAvailable,
+        giftBoxesOpened: newOpened,
+        miningRate: newMiningRate,
+        user: updatedUser,
+        miner: updatedMiner
+      };
+    } catch (err) {
+      console.error('DBService.claimGiftBox Error:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Get list of purchased NFT miner plan IDs for a user
+   */
+  async getUserPurchasedNFTs(userId) {
+    try {
+      const tgId = Number(userId) || 9482103;
+      const purchasedSet = new Set();
+
+      // 1. Check user_purchased_miners table
+      try {
+        const res = await db.query('SELECT nft_id FROM user_purchased_miners WHERE user_id = $1', [tgId]);
+        res.rows.forEach(r => {
+          if (r.nft_id) {
+            purchasedSet.add(r.nft_id);
+            purchasedSet.add(r.nft_id.replace('nft-', ''));
+            purchasedSet.add(`nft-${r.nft_id.replace('nft-', '')}`);
+          }
+        });
+      } catch (tableErr) {
+        // Table may be creating
+      }
+
+      // 2. Check active_miners table
+      try {
+        const activeRes = await db.query('SELECT miner_id, name, purchase_price FROM active_miners WHERE user_id = $1', [tgId]);
+        const miner = activeRes.rows[0];
+        if (miner && (parseFloat(miner.purchase_price || 0) > 0 || (miner.miner_id && miner.miner_id !== 'starter' && miner.miner_id !== '100') || (miner.name && !miner.name.includes('Starter')))) {
+          const mId = miner.miner_id || '1024';
+          purchasedSet.add(mId);
+          purchasedSet.add(mId.replace('nft-', ''));
+          purchasedSet.add(`nft-${mId.replace('nft-', '')}`);
+        }
+      } catch (minerErr) {}
+
+      // 3. Check transactions history for any past NFT purchase
+      try {
+        const txRes = await db.query(`
+          SELECT type FROM transactions 
+          WHERE user_id = $1 AND type ILIKE 'Purchased %'
+        `, [tgId]);
+        txRes.rows.forEach(tx => {
+          const t = tx.type || '';
+          if (t.includes('1024') || t.includes('Cyber Bot')) {
+            purchasedSet.add('nft-1024');
+            purchasedSet.add('1024');
+          } else if (t.includes('2048') || t.includes('Frostfang Wolf')) {
+            purchasedSet.add('nft-2048');
+            purchasedSet.add('2048');
+          } else if (t.includes('4096') || t.includes('Cyber Panda')) {
+            purchasedSet.add('nft-4096');
+            purchasedSet.add('4096');
+          } else if (t.includes('6666') || t.includes('Neon Neko')) {
+            purchasedSet.add('nft-6666');
+            purchasedSet.add('6666');
+          } else if (t.includes('5555') || t.includes('Solar Phoenix')) {
+            purchasedSet.add('nft-5555');
+            purchasedSet.add('5555');
+          } else if (t.includes('9999') || t.includes('Aurelius Lion')) {
+            purchasedSet.add('nft-9999');
+            purchasedSet.add('9999');
+          }
+        });
+      } catch (txErr) {}
+
+      return Array.from(purchasedSet);
+    } catch (err) {
+      console.error('DBService.getUserPurchasedNFTs Error:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Check if a specific NFT plan has already been purchased by the user
+   */
+  async isNFTAlreadyPurchased(userId, nftId) {
+    try {
+      if (!nftId) return false;
+      const purchased = await this.getUserPurchasedNFTs(userId);
+      const cleanId = String(nftId).replace('nft-', '');
+      return purchased.includes(nftId) || purchased.includes(cleanId) || purchased.includes(`nft-${cleanId}`);
+    } catch (err) {
+      console.error('DBService.isNFTAlreadyPurchased Error:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Record a new NFT purchase in Neon Database
+   */
+  async recordNFTPurchase(userId, nft) {
+    try {
+      const tgId = Number(userId) || 9482103;
+      const nftId = nft.id || `nft-${nft.miner_id || '1024'}`;
+      const name = nft.name || 'Mining Plan';
+      const price = parseFloat(nft.price || nft.purchase_price || 0);
+      const dailyReward = parseFloat(nft.dailyReward || nft.daily_reward || 0.2000);
+
+      await db.query(`
+        INSERT INTO user_purchased_miners (user_id, nft_id, name, price, daily_reward)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (user_id, nft_id) DO NOTHING;
+      `, [tgId, nftId, name, price, dailyReward]);
+
+      return true;
+    } catch (err) {
+      console.error('DBService.recordNFTPurchase Error:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Get comprehensive system statistics for the Admin Bot Dashboard
+   */
+  async getAdminSystemStats() {
+    try {
+      // 1. Users overview & aggregated balances
+      const userRes = await db.query(`
+        SELECT 
+          COUNT(*)::INT AS total_users,
+          COUNT(*) FILTER (WHERE is_banned = TRUE)::INT AS banned_users,
+          COUNT(*) FILTER (WHERE updated_at >= NOW() - INTERVAL '24 HOURS')::INT AS active_24h,
+          COALESCE(SUM(balance), 0)::NUMERIC AS total_balance,
+          COALESCE(SUM(deposit_balance), 0)::NUMERIC AS total_deposit_balance,
+          COALESCE(SUM(total_deposited), 0)::NUMERIC AS total_deposited,
+          COALESCE(SUM(total_withdrawn), 0)::NUMERIC AS total_withdrawn
+        FROM users;
+      `);
+      const u = userRes.rows[0] || {};
+
+      // 2. Transactions stats (deposits, approved withdrawals, pending withdrawals)
+      const txRes = await db.query(`
+        SELECT 
+          COUNT(*) FILTER (WHERE type ILIKE 'Deposit%')::INT AS deposits_count,
+          COUNT(*) FILTER (WHERE type ILIKE '%Withdraw%' AND (status = 'Completed' OR status = 'Success'))::INT AS withdrawals_completed_count,
+          COUNT(*) FILTER (WHERE status = 'Pending')::INT AS withdrawals_pending_count,
+          COALESCE(SUM(NULLIF(regexp_replace(amount, '[^0-9.]', '', 'g'), '')::NUMERIC) FILTER (WHERE type ILIKE 'Deposit%'), 0) AS deposits_amount,
+          COALESCE(SUM(NULLIF(regexp_replace(amount, '[^0-9.]', '', 'g'), '')::NUMERIC) FILTER (WHERE type ILIKE '%Withdraw%' AND (status = 'Completed' OR status = 'Success')), 0) AS withdrawals_completed_amount,
+          COALESCE(SUM(NULLIF(regexp_replace(amount, '[^0-9.]', '', 'g'), '')::NUMERIC) FILTER (WHERE status = 'Pending'), 0) AS withdrawals_pending_amount
+        FROM transactions;
+      `);
+      const t = txRes.rows[0] || {};
+
+      // 3. Miners and NFTs stats
+      const minerRes = await db.query(`
+        SELECT 
+          COUNT(*)::INT AS total_active_miners,
+          COALESCE(SUM(daily_reward), 0)::NUMERIC AS total_daily_mining_rate
+        FROM active_miners
+        WHERE status = 'Active';
+      `);
+      const m = minerRes.rows[0] || {};
+
+      const purchasedPlansRes = await db.query(`
+        SELECT COUNT(*)::INT AS total_purchased_plans
+        FROM user_purchased_miners;
+      `).catch(() => ({ rows: [{ total_purchased_plans: 0 }] }));
+      const p = purchasedPlansRes.rows[0] || {};
+
+      const totalMainBal = parseFloat(u.total_balance || 0);
+      const totalDepBal = parseFloat(u.total_deposit_balance || 0);
+      const totalUserFunds = parseFloat((totalMainBal + totalDepBal).toFixed(4));
+
+      return {
+        totalUsers: parseInt(u.total_users || 0),
+        bannedUsers: parseInt(u.banned_users || 0),
+        activeUsers24h: parseInt(u.active_24h || 0),
+        totalUserBalance: totalMainBal.toFixed(4),
+        totalDepositBalance: totalDepBal.toFixed(2),
+        totalUserFunds: totalUserFunds.toFixed(4),
+        totalDepositedAmount: parseFloat(u.total_deposited || t.deposits_amount || 0).toFixed(2),
+        totalDepositsCount: parseInt(t.deposits_count || 0),
+        totalWithdrawnAmount: parseFloat(u.total_withdrawn || t.withdrawals_completed_amount || 0).toFixed(4),
+        totalWithdrawnCount: parseInt(t.withdrawals_completed_count || 0),
+        pendingWithdrawalsCount: parseInt(t.withdrawals_pending_count || 0),
+        pendingWithdrawalsAmount: parseFloat(t.withdrawals_pending_amount || 0).toFixed(4),
+        totalActiveMiners: parseInt(m.total_active_miners || 0),
+        totalPurchasedPlans: parseInt(p.total_purchased_plans || 0),
+        totalDailyMiningRate: parseFloat(m.total_daily_mining_rate || 0).toFixed(4)
+      };
+    } catch (err) {
+      console.error('DBService.getAdminSystemStats Error:', err);
+      return {
+        totalUsers: 0,
+        bannedUsers: 0,
+        activeUsers24h: 0,
+        totalUserBalance: '0.0000',
+        totalDepositBalance: '0.00',
+        totalUserFunds: '0.0000',
+        totalDepositedAmount: '0.00',
+        totalDepositsCount: 0,
+        totalWithdrawnAmount: '0.0000',
+        totalWithdrawnCount: 0,
+        pendingWithdrawalsCount: 0,
+        pendingWithdrawalsAmount: '0.0000',
+        totalActiveMiners: 0,
+        totalPurchasedPlans: 0,
+        totalDailyMiningRate: '0.0000'
+      };
     }
   }
 }

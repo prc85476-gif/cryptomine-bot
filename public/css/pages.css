@@ -450,6 +450,72 @@
   transform: scale(0.96);
 }
 
+/* Approved & Active Miner Card */
+.nft-market-card.is-approved {
+  border-color: rgba(220, 38, 38, 0.4) !important;
+  background: linear-gradient(180deg, rgba(254, 242, 242, 0.6) 0%, #FFFFFF 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+[data-theme="dark"] .nft-market-card.is-approved {
+  background: linear-gradient(180deg, rgba(220, 38, 38, 0.1) 0%, #101c3d 100%);
+  border-color: rgba(239, 68, 68, 0.4) !important;
+}
+
+/* Rubber Stamp Overlay (Angled Red Approved Seal) */
+.nft-approved-stamp-wrap {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  width: 175px;
+  height: 115px;
+  pointer-events: none;
+  z-index: 12;
+  filter: drop-shadow(0 4px 10px rgba(220, 38, 38, 0.28));
+  animation: stampImpact 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes stampImpact {
+  0% {
+    opacity: 0;
+    transform: scale(1.7) rotate(-22deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.nft-approved-seal-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Disabled & Approved Capsule Button */
+.btn-nft-buy-capsule.is-approved-btn {
+  background: #E2E8F0 !important;
+  color: #475569 !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+  border: 1px solid #CBD5E1 !important;
+  padding: 8px 16px;
+  opacity: 0.92;
+}
+
+[data-theme="dark"] .btn-nft-buy-capsule.is-approved-btn {
+  background: rgba(255, 255, 255, 0.09) !important;
+  color: #94A3B8 !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+.btn-nft-buy-capsule.is-approved-btn .check-icon {
+  width: 14px;
+  height: 14px;
+  stroke: #10B981;
+}
+
 /* ==========================================================================
    2. Tasks Page & Daily Streak
    ========================================================================== */
@@ -1697,6 +1763,115 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
+/* Referral Gift Box Bonus Banner (Clean White Box Style) */
+.referral-giftbox-banner {
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  border-radius: 20px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+  user-select: none;
+}
+
+[data-theme="dark"] .referral-giftbox-banner {
+  background: var(--bg-card, #1e293b);
+  border-color: var(--border-subtle, #334155);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.referral-giftbox-banner:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+[data-theme="dark"] .referral-giftbox-banner:hover {
+  border-color: rgba(245, 158, 11, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.referral-giftbox-banner:active {
+  transform: scale(0.98);
+}
+
+.ref-gift-icon-wrap {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+.ref-gift-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ref-gift-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ref-gift-badge {
+  font-size: 9.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #D97706;
+  letter-spacing: 0.5px;
+}
+
+[data-theme="dark"] .ref-gift-badge {
+  color: #FBBF24;
+}
+
+.ref-gift-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--text-primary, #0f172a);
+  letter-spacing: -0.2px;
+}
+
+[data-theme="dark"] .ref-gift-title {
+  color: #F8FAFC;
+}
+
+.ref-gift-desc {
+  font-size: 11px;
+  color: var(--text-secondary, #64748b);
+  line-height: 1.35;
+}
+
+[data-theme="dark"] .ref-gift-desc {
+  color: #94A3B8;
+}
+
+.ref-gift-arrow {
+  color: var(--text-muted, #94A3B8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ref-gift-arrow {
+  color: #D97706;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .ref-dash-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
@@ -2217,20 +2392,20 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: 22px;
-  padding: 6px 0 10px 0;
+  margin-bottom: 20px;
+  padding: 4px 0 8px 0;
 }
 
 .giftbox-back-btn {
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   border-radius: 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-subtle, #e2e8f0);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-primary);
+  color: var(--text-primary, #0f172a);
   cursor: pointer;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   transition: all 0.2s ease;
@@ -2248,9 +2423,9 @@
 }
 
 .giftbox-back-btn svg {
-  width: 24px;
-  height: 24px;
-  stroke: var(--text-primary);
+  width: 22px;
+  height: 22px;
+  stroke: var(--text-primary, #0f172a);
 }
 
 .giftbox-title-wrap {
@@ -2260,17 +2435,45 @@
 }
 
 .giftbox-heading {
-  font-size: 23px;
+  font-size: 20px;
   font-weight: 900;
-  letter-spacing: -0.5px;
-  color: var(--text-primary);
-  line-height: 1.15;
+  letter-spacing: -0.4px;
+  color: var(--text-primary, #0f172a);
+  line-height: 1.2;
   margin: 0;
+}
+
+.giftbox-header-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.giftbox-available-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #D97706;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.giftbox-available-badge.empty {
+  background: rgba(148, 163, 184, 0.12);
+  color: #64748b;
+  border-color: rgba(148, 163, 184, 0.25);
 }
 
 .giftbox-subheading {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--text-secondary, #64748b);
   font-weight: 500;
   margin: 0;
 }
@@ -2279,7 +2482,85 @@
 .giftbox-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  gap: 14px;
+}
+
+/* Rewards Formula Guide Banner atop Gift Grid */
+.giftbox-guide-banner {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(217, 119, 6, 0.12) 100%);
+  border: 1px dashed rgba(245, 158, 11, 0.4);
+  border-radius: 16px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+[data-theme="dark"] .giftbox-guide-banner {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.giftbox-guide-banner .guide-badge {
+  font-size: 9.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #D97706;
+  letter-spacing: 0.5px;
+}
+
+.giftbox-guide-banner .guide-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.giftbox-guide-banner .guide-item {
+  font-size: 11px;
+  color: var(--text-secondary, #64748b);
+  font-weight: 600;
+}
+
+.giftbox-guide-banner .guide-item strong {
+  color: var(--text-primary, #0f172a);
+}
+
+.giftbox-guide-banner .guide-item.highlight {
+  color: #D97706;
+  font-weight: 800;
+}
+
+.giftbox-guide-banner .guide-item.highlight strong {
+  color: #B45309;
+}
+
+[data-theme="dark"] .giftbox-guide-banner .guide-item.highlight strong {
+  color: #FCD34D;
+}
+
+/* Milestone Tag on 10th, 20th etc. cards */
+.giftbox-milestone-tag {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  background: linear-gradient(135deg, #FFE600 0%, #F59E0B 100%);
+  color: #78350F;
+  border-radius: 20px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+  z-index: 2;
+  letter-spacing: 0.2px;
+  animation: pulseMilestone 1.6s infinite ease-in-out;
+}
+
+@keyframes pulseMilestone {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
 }
 
 @media (max-width: 330px) {
@@ -2289,205 +2570,745 @@
 }
 
 .giftbox-card {
-  background: #FFFFFF;
-  border-radius: 22px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  background: transparent;
+  border-radius: 20px;
+  border: none;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
   position: relative;
   overflow: hidden;
   display: flex;
-  flex-direction: column;
   cursor: pointer;
   transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 [data-theme="dark"] .giftbox-card {
-  background: #0f172a;
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
 }
 
 .giftbox-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 12px 30px rgba(124, 58, 237, 0.18);
+  transform: translateY(-4px);
+  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.16);
 }
 
 .giftbox-card:active {
   transform: scale(0.96);
 }
 
-/* Diagonal Ribbon Badge at Top Right */
-.gift-corner-ribbon {
-  position: absolute;
-  top: 15px;
-  right: -28px;
-  transform: rotate(45deg);
-  background: linear-gradient(135deg, #7C3AED 0%, #6366F1 100%);
-  color: #FFFFFF;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.8px;
-  padding: 4px 34px;
-  text-align: center;
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.4);
-  z-index: 2;
+.giftbox-card-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+  border-radius: 20px;
+}
+
+.giftbox-card.claimed-exit {
+  animation: giftClaimExit 0.45s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   pointer-events: none;
 }
 
-/* Card Header Title */
-.gift-card-header {
-  padding: 16px 14px 4px 14px;
+@keyframes giftClaimExit {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    filter: brightness(1.2);
+  }
+  50% {
+    transform: scale(1.08) translateY(-6px);
+    opacity: 0.9;
+    filter: brightness(1.5) drop-shadow(0 0 16px #FFE600);
+  }
+  100% {
+    transform: scale(0.1) translateY(40px);
+    opacity: 0;
+    filter: blur(8px);
+  }
 }
 
-.gift-card-title {
-  font-size: 18px;
-  font-weight: 900;
-  letter-spacing: -0.3px;
-  margin: 0;
+.giftbox-card-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
 
-.btc-theme .gift-card-title {
-  color: #D97706;
+.giftbox-dot-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #FFE600;
+  box-shadow: 0 0 8px #FFE600;
+  animation: pulseDot 1.4s infinite ease-in-out;
 }
 
-[data-theme="dark"] .btc-theme .gift-card-title {
-  color: #FBBF24;
+/* Empty State Card */
+.giftbox-grid.empty-wrapper {
+  grid-template-columns: 1fr;
 }
 
-.eth-theme .gift-card-title {
-  color: #2563EB;
+.giftbox-empty-card {
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  border-radius: 24px;
+  padding: 28px 20px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
 }
 
-[data-theme="dark"] .eth-theme .gift-card-title {
-  color: #60A5FA;
-}
-
-.gram-theme .gift-card-title {
-  color: #0284C7;
-}
-
-[data-theme="dark"] .gram-theme .gift-card-title {
-  color: #38BDF8;
-}
-
-/* Artwork image container */
-.gift-art-wrap {
-  width: 100%;
-  aspect-ratio: 1 / 1;
+.giftbox-empty-icon-wrap {
+  width: 80px;
+  height: 80px;
+  border-radius: 24px;
+  background: radial-gradient(circle at center, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.05) 100%);
+  border: 1.5px solid rgba(245, 158, 11, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 12px;
+  position: relative;
+  box-shadow: 0 8px 20px rgba(245, 158, 11, 0.15);
 }
 
-.gift-art-img {
+.giftbox-floating-crown {
+  position: absolute;
+  top: -12px;
+  right: -6px;
+  width: 24px;
+  height: 24px;
+  animation: floatCrown 2s ease-in-out infinite alternate;
+}
+
+@keyframes floatCrown {
+  0% { transform: translateY(0) rotate(-6deg); }
+  100% { transform: translateY(-4px) rotate(6deg); }
+}
+
+.giftbox-empty-box-svg {
+  width: 40px;
+  height: 40px;
+  color: #D97706;
+}
+
+.giftbox-empty-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--text-primary, #0f172a);
+  margin: 0;
+}
+
+.giftbox-empty-desc {
+  font-size: 13px;
+  color: var(--text-secondary, #64748b);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 320px;
+}
+
+.giftbox-perk-highlight {
   width: 100%;
-  height: 100%;
-  object-fit: contain;
-  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.08));
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(217, 119, 6, 0.14) 100%);
+  border: 1px dashed rgba(245, 158, 11, 0.4);
+  border-radius: 16px;
+  padding: 14px 16px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.giftbox-card:hover .gift-art-img {
-  transform: scale(1.08);
+.giftbox-perk-highlight .perk-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #D97706;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  align-self: flex-start;
 }
 
-/* Footer Tag Badges */
-.gift-card-footer {
+.giftbox-perk-highlight .perk-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary, #0f172a);
+}
+
+.giftbox-perk-highlight .perk-subtitle {
+  font-size: 11px;
+  color: var(--text-secondary, #64748b);
+  line-height: 1.4;
+}
+
+.giftbox-stats-strip {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  background: var(--bg-card-hover, #f8fafc);
+  border-radius: 14px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle, #e2e8f0);
+}
+
+.giftbox-stats-strip .stat-mini {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.giftbox-stats-strip .stat-mini .val {
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--text-primary, #0f172a);
+}
+
+.giftbox-stats-strip .stat-mini .lbl {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted, #94a3b8);
+}
+
+.giftbox-stats-strip .stat-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border-subtle, #e2e8f0);
+}
+
+.giftbox-actions-row {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-gift-invite-tg {
+  width: 100%;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 10px 12px 10px;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  background: rgba(0, 0, 0, 0.02);
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3);
+  transition: all 0.2s ease;
 }
 
-[data-theme="dark"] .gift-card-footer {
-  border-top-color: rgba(255, 255, 255, 0.05);
-  background: rgba(255, 255, 255, 0.02);
+.btn-gift-invite-tg:active {
+  transform: scale(0.97);
 }
 
-.gift-tag-item {
+.btn-gift-invite-tg svg {
+  width: 18px;
+  height: 18px;
+}
+
+.btn-gift-copy-link {
+  width: 100%;
+  height: 44px;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text-primary, #0f172a);
+  border: 1.5px solid var(--border-subtle, #cbd5e1);
+  font-size: 13px;
+  font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #475569;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-[data-theme="dark"] .gift-tag-item {
-  color: #94A3B8;
+.btn-gift-copy-link:active {
+  background: var(--bg-card-hover, #f8fafc);
+  transform: scale(0.97);
 }
 
-.gift-tag-icon {
-  font-size: 12px;
+.btn-gift-copy-link svg {
+  width: 16px;
+  height: 16px;
 }
 
-.gift-tag-item.usdt .gift-tag-icon {
+/* ==========================================================================
+   Full-Screen Sunburst Gift Reveal Modal (Clean White / Light Theme)
+   ========================================================================== */
+.gift-fullscreen-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  background: radial-gradient(circle at center, #ffffff 0%, #fffbeb 50%, #fef3c7 100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: env(safe-area-inset-top, 24px) 20px env(safe-area-inset-bottom, 24px) 20px;
+}
+
+.gift-fullscreen-modal.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Sunburst Rays Background (Bright White & Warm Golden Cream) */
+.gift-sunburst-bg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 250vmax;
+  height: 250vmax;
+  transform: translate(-50%, -50%);
+  background: repeating-conic-gradient(
+    from 0deg,
+    #ffffff 0deg 7.5deg,
+    #fde68a 7.5deg 15deg
+  );
+  animation: sunburstRotate 50s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.85;
+}
+
+@keyframes sunburstRotate {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Ambient Center Warm Flare */
+.gift-fullscreen-modal::before {
+  content: "";
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 450px;
+  height: 450px;
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.3) 0%, rgba(245, 158, 11, 0.1) 45%, transparent 70%);
+  filter: blur(35px);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Top Bar: Close Button (Light Theme) */
+.gift-modal-top-bar {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+}
+
+.gift-modal-close-btn {
+  background: rgba(0, 0, 0, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 800;
+  padding: 8px 18px;
+  border-radius: 20px;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
+  gap: 6px;
+  transition: transform 0.2s, background 0.2s;
+  user-select: none;
+}
+
+.gift-modal-close-btn:hover {
+  background: rgba(0, 0, 0, 0.12);
+  transform: scale(1.05);
+}
+
+.gift-modal-close-btn:active {
+  transform: scale(0.95);
+}
+
+/* Stage 1: Glowing 3D Gift Box */
+.gift-stage-intro {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  width: 15px;
-  height: 15px;
+  margin: auto 0;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gift-glowing-card-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Radiant Golden Aura on White */
+.gift-glowing-card-wrap::before {
+  content: "";
+  position: absolute;
+  width: 130%;
+  height: 130%;
+  border-radius: 40px;
+  background: radial-gradient(circle, rgba(255, 250, 180, 1) 0%, rgba(255, 215, 0, 0.8) 35%, rgba(245, 158, 11, 0.35) 65%, rgba(245, 158, 11, 0) 80%);
+  filter: blur(28px);
+  animation: glowPulse 2s ease-in-out infinite alternate;
+  z-index: 1;
+}
+
+@keyframes glowPulse {
+  0% { transform: scale(0.92); opacity: 0.8; }
+  100% { transform: scale(1.2); opacity: 1; filter: blur(36px); }
+}
+
+.gift-glowing-card-img {
+  position: relative;
+  z-index: 2;
+  width: 250px;
+  height: 280px;
+  object-fit: cover;
+  border-radius: 28px;
+  box-shadow: 0 0 45px 15px rgba(251, 191, 36, 0.5), 0 16px 36px rgba(0, 0, 0, 0.12);
+  animation: giftIntroPop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), giftFloating 3s ease-in-out infinite 0.8s;
+  cursor: pointer;
+}
+
+@keyframes giftIntroPop {
+  0% { transform: scale(0.4) rotate(-8deg); opacity: 0; }
+  70% { transform: scale(1.08) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes giftFloating {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(1.5deg); }
+}
+
+.gift-glowing-card-img.shake {
+  animation: giftShake 0.45s cubic-bezier(.36,.07,.19,.97) both infinite !important;
+}
+
+@keyframes giftShake {
+  10%, 90% { transform: translate3d(-3px, 0, 0) rotate(-1.5deg); }
+  20%, 80% { transform: translate3d(4px, 0, 0) rotate(2.5deg); }
+  30%, 50%, 70% { transform: translate3d(-6px, 0, 0) rotate(-3.5deg); }
+  40%, 60% { transform: translate3d(6px, 0, 0) rotate(3.5deg); }
+}
+
+/* Stage 2: Lightning Flash */
+.gift-lightning-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, #ffffff 0%, #fffbeb 60%, rgba(255, 215, 0, 0.9) 100%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 50;
+  transition: opacity 0.12s ease-out;
+}
+
+.gift-lightning-overlay.flash {
+  opacity: 1;
+}
+
+.gift-lightning-bolt {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 320px;
+  height: 320px;
+  transform: translate(-50%, -50%) scale(0);
+  background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(0,240,255,0.9) 35%, rgba(245,158,11,0) 70%);
   border-radius: 50%;
-  background: #10B981;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 900;
-  line-height: 1;
+  pointer-events: none;
+  z-index: 51;
+  transition: transform 0.25s ease-out, opacity 0.3s ease-out;
 }
 
-/* Gift Reveal Modal Animation */
-.gift-modal-preview-box {
-  display: flex;
+.gift-lightning-bolt.active {
+  transform: translate(-50%, -50%) scale(2.8);
+  opacity: 0;
+}
+
+/* Stage 3: Custom Colorful Speed Reward Card & Confetti (Light Theme) */
+.gift-stage-reward {
+  position: relative;
+  z-index: 5;
+  display: none;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 14px 0 20px 0;
   text-align: center;
+  margin: auto 0;
+  width: 100%;
 }
 
-.gift-modal-img {
-  width: 140px;
-  height: 140px;
-  object-fit: contain;
-  margin-bottom: 14px;
-  animation: giftBounce 2s infinite ease-in-out;
-  filter: drop-shadow(0 8px 24px rgba(124, 58, 237, 0.3));
+.gift-stage-reward.active {
+  display: flex;
+  animation: rewardFadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes giftBounce {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-8px) scale(1.04); }
+@keyframes rewardFadeUp {
+  0% { transform: translateY(30px) scale(0.85); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
 }
 
-.gift-reward-badge {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.12));
-  border: 1px solid rgba(16, 185, 129, 0.35);
-  border-radius: 16px;
-  padding: 12px 24px;
+/* Colorful Gradient Reward Card (Rich Amber / Gold / Peach Gradient) */
+.gift-custom-reward-card {
+  width: 255px;
+  background: linear-gradient(145deg, #fff7ed 0%, #fed7aa 45%, #fef08a 100%);
+  border-radius: 30px;
+  padding: 22px 18px 20px 18px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 16px;
+  border: 2px solid #F59E0B;
+  box-shadow: 0 20px 45px rgba(245, 158, 11, 0.25), 0 6px 20px rgba(0, 0, 0, 0.06);
+  margin-bottom: 22px;
+  position: relative;
+  overflow: hidden;
 }
 
-.gift-reward-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: #10B981;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
+.gift-custom-reward-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background: linear-gradient(90deg, #F59E0B, #EC4899, #6366F1, #00F0FF);
 }
 
-.gift-reward-val {
-  font-size: 26px;
+.gift-power-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1.5px solid #F59E0B;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #B45309;
+  letter-spacing: 0.6px;
+  margin-bottom: 14px;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.15);
+}
+
+.gift-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #F59E0B;
+  box-shadow: 0 0 8px #F59E0B;
+  animation: pulseDot 1.4s infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+.gift-energy-core-wrap {
+  position: relative;
+  width: 86px;
+  height: 86px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.gift-core-glow-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.6) 0%, rgba(236, 72, 153, 0.3) 50%, transparent 75%);
+  animation: ringSpin 3s linear infinite;
+}
+
+@keyframes ringSpin {
+  0% { transform: scale(0.95); opacity: 0.75; }
+  50% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.75; }
+}
+
+.gift-core-inner {
+  position: relative;
+  z-index: 2;
+  width: 76px;
+  height: 76px;
+  background: #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2.5px solid #F59E0B;
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.25);
+}
+
+.gift-core-lightning-icon {
+  width: 42px;
+  height: 42px;
+  filter: drop-shadow(0 2px 6px rgba(217, 119, 6, 0.4));
+  animation: boltPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes boltPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
+.gift-boost-val-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.gift-boost-val-number {
+  font-size: 38px;
   font-weight: 900;
-  color: #10B981;
+  background: linear-gradient(135deg, #D97706 0%, #B45309 50%, #EA580C 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -1px;
+}
+
+.gift-boost-val-sub {
+  font-size: 12px;
+  font-weight: 900;
+  color: #78350F;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  margin-top: 4px;
+}
+
+.gift-boost-desc-txt {
+  font-size: 11px;
+  color: #475569;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.35;
+  margin: 0;
+}
+
+/* Typography (Dark, Clear, Readable for Light Theme) */
+.gift-reward-congrats {
+  font-size: 32px;
+  font-weight: 900;
+  color: #0F172A;
   letter-spacing: -0.5px;
+  margin: 0 0 6px 0;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+.gift-reward-won-txt {
+  font-size: 17px;
+  font-weight: 700;
+  color: #334155;
+  margin: 0 0 10px 0;
+  letter-spacing: -0.2px;
+}
+
+/* Bottom Claim Button (High-Contrast Golden Orange) */
+.gift-reward-bottom-wrap {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 380px;
+  padding-bottom: 8px;
+}
+
+.btn-claim-reward-pill {
+  width: 100%;
+  height: 56px;
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 50%, #EA580C 100%);
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 800;
+  border: none;
+  border-radius: 28px;
+  cursor: pointer;
+  box-shadow: 0 8px 25px rgba(245, 158, 11, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+}
+
+.btn-claim-reward-pill:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(245, 158, 11, 0.55);
+}
+
+.btn-claim-reward-pill:active {
+  transform: scale(0.97);
+}
+
+/* Falling Custom Vector Confetti Particles */
+.gift-confetti-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 3;
+}
+
+.confetti-item {
+  position: absolute;
+  top: -45px;
+  opacity: 0.9;
+  animation: confettiFall linear forwards;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.15));
+}
+
+@keyframes confettiFall {
+  0% {
+    transform: translateY(0) rotate(0deg) scale(0.85);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(115vh) rotate(720deg) scale(1.1);
+    opacity: 0;
+  }
 }
 
 

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -512,6 +512,21 @@
               </div>
             </div>
 
+            <!-- Referral Gift Box Bonus Banner -->
+            <div class="referral-giftbox-banner" onclick="App.switchTab('giftbox')" role="button" tabindex="0">
+              <div class="ref-gift-icon-wrap">
+                <img src="/assets/images/gifts/gift-usdt.png" alt="Gift Box" class="ref-gift-img" />
+              </div>
+              <div class="ref-gift-content">
+                <div class="ref-gift-badge">🎁 Referral Bonus</div>
+                <div class="ref-gift-title">+1 Mystery Gift Box per Referral!</div>
+                <div class="ref-gift-desc">Invite 1 friend = Get 1 Mystery Box with speed boosts & crypto!</div>
+              </div>
+              <div class="ref-gift-arrow">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </div>
+            </div>
+
             <!-- 2. Dashboard Stats Overview (Total Refer & Total Refer Income) -->
             <div class="referral-dashboard-grid">
               <!-- Stat 1: Total Referrals -->
@@ -855,102 +870,17 @@
               </svg>
             </button>
             <div class="giftbox-title-wrap">
-              <h1 class="giftbox-heading">Open gifts and get free coins</h1>
-              <p class="giftbox-subheading">Tap on any gift box to open & claim instant rewards!</p>
+              <div class="giftbox-header-title-row">
+                <h1 class="giftbox-heading">Open gifts and get free coins</h1>
+                <span class="giftbox-available-badge" id="giftbox-available-pill"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-1px;margin-right:4px;"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5" rx="1"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>Available: 0</span>
+              </div>
+              <p class="giftbox-subheading">Tap on any gift box to open & claim instant rewards! (+1 Box per Refer)</p>
             </div>
           </div>
 
-          <!-- 2-Column Gift Boxes Grid matching Reference Screenshot -->
-          <div class="giftbox-grid">
-            <!-- 1. BTC Gift Box -->
-            <div class="giftbox-card" data-gift-id="btc" data-gift-name="BTC Gift Box" data-gift-type="BTC">
-              <!-- Corner Ribbon Badge -->
-              <div class="gift-corner-ribbon">
-                <span>GIFT</span>
-              </div>
-              
-              <!-- Card Header / Title inside -->
-              <div class="gift-card-header btc-theme">
-                <h3 class="gift-card-title">BTC GIFT</h3>
-              </div>
-
-              <!-- 3D Artwork Image -->
-              <div class="gift-art-wrap">
-                <img src="/assets/images/gifts/gift-btc.jpg" alt="BTC Gift Box" class="gift-art-img" loading="lazy" />
-              </div>
-
-              <!-- Footer Badges -->
-              <div class="gift-card-footer">
-                <div class="gift-tag-item coins">
-                  <span class="gift-tag-icon">💎</span>
-                  <span class="gift-tag-txt">Coins</span>
-                </div>
-                <div class="gift-tag-item usdt">
-                  <span class="gift-tag-icon">₮</span>
-                  <span class="gift-tag-txt">USDT gifts</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- 2. ETH Gift Box -->
-            <div class="giftbox-card" data-gift-id="eth" data-gift-name="ETH Gift Box" data-gift-type="ETH">
-              <!-- Corner Ribbon Badge -->
-              <div class="gift-corner-ribbon">
-                <span>GIFT</span>
-              </div>
-              
-              <!-- Card Header / Title inside -->
-              <div class="gift-card-header eth-theme">
-                <h3 class="gift-card-title">ETH GIFT</h3>
-              </div>
-
-              <!-- 3D Artwork Image -->
-              <div class="gift-art-wrap">
-                <img src="/assets/images/gifts/gift-eth.jpg" alt="ETH Gift Box" class="gift-art-img" loading="lazy" />
-              </div>
-
-              <!-- Footer Badges -->
-              <div class="gift-card-footer">
-                <div class="gift-tag-item coins">
-                  <span class="gift-tag-icon">💎</span>
-                  <span class="gift-tag-txt">Coins</span>
-                </div>
-                <div class="gift-tag-item usdt">
-                  <span class="gift-tag-icon">₮</span>
-                  <span class="gift-tag-txt">USDT gifts</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- 3. GRAM / TON Gift Box -->
-            <div class="giftbox-card" data-gift-id="gram" data-gift-name="GRAM Gift Box" data-gift-type="GRAM">
-              <!-- Corner Ribbon Badge -->
-              <div class="gift-corner-ribbon">
-                <span>GIFT</span>
-              </div>
-              
-              <!-- Card Header / Title inside -->
-              <div class="gift-card-header gram-theme">
-                <h3 class="gift-card-title">GRAM GIFT</h3>
-              </div>
-
-              <!-- 3D Artwork Image -->
-              <div class="gift-art-wrap">
-                <img src="/assets/images/gifts/gift-gram.jpg" alt="GRAM Gift Box" class="gift-art-img" loading="lazy" />
-              </div>
-
-              <!-- Footer Badges -->
-              <div class="gift-card-footer">
-                <div class="gift-tag-item coins">
-                  <span class="gift-tag-icon">💎</span>
-                  <span class="gift-tag-txt">Coins</span>
-                </div>
-                <div class="gift-tag-item usdt">
-                  <span class="gift-tag-icon">₮</span>
-                  <span class="gift-tag-txt">USDT gifts</span>
-                </div>
-              </div>
-            </div>
+          <!-- 2-Column Gift Boxes Grid (Rendered Dynamically via GiftBoxModule) -->
+          <div class="giftbox-grid" id="giftbox-grid-container">
+            <!-- Dynamic Gift Boxes or Empty State rendered here -->
           </div>
         </section>
 
@@ -1324,10 +1254,24 @@
 
         <!-- 3. Wallet Section -->
         <div class="withdraw-field-group">
-          <label class="withdraw-section-label">Wallet</label>
-          <div class="withdraw-wallet-card">
+          <div class="withdraw-field-header-row">
+            <label class="withdraw-section-label">Wallet</label>
+            <span class="withdraw-addr-badge" id="withdraw-addr-badge" style="display: none;">🔒 Saved</span>
+          </div>
+          <div class="withdraw-wallet-card" id="withdraw-wallet-card">
             <input type="text" id="withdraw-address-input" class="withdraw-wallet-input" placeholder="Wallet address" autocomplete="off" spellcheck="false" />
             <button type="button" class="btn-paste-wallet" id="btn-paste-withdraw-addr">Paste</button>
+          </div>
+          <!-- Real-time address status / plan warning bar -->
+          <div class="withdraw-addr-status-bar" id="withdraw-addr-status-bar" style="display: none;">
+            <div class="addr-status-left">
+              <span class="addr-status-icon" id="withdraw-status-icon">⚠️</span>
+              <span class="addr-status-text" id="withdraw-status-text">To change your withdrawal wallet address, you must purchase a mining plan.</span>
+            </div>
+            <div class="addr-status-actions" id="withdraw-status-actions" style="display: none;">
+              <button type="button" class="btn-addr-action btn-addr-plan" id="btn-withdraw-buy-plan">Purchase Plan</button>
+              <button type="button" class="btn-addr-action btn-addr-reset" id="btn-withdraw-reset-addr">Reset</button>
+            </div>
           </div>
         </div>
 
@@ -1398,9 +1342,9 @@
       </div>
 
       <!-- Commission Tier Breakdown -->
-      <div style="background: rgba(8, 14, 32, 0.6); border-radius: 12px; padding: 12px; border: 1px solid rgba(255, 255, 255, 0.06);">
-        <div style="font-size: 12px; font-weight: 700; color: var(--text-white); margin-bottom: 6px;">Commission Structure</div>
-        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary);">
+      <div style="background: var(--bg-card-hover, #F1F5F9); border-radius: 12px; padding: 12px; border: 1px solid var(--border-subtle, #E2E8F0);">
+        <div style="font-size: 12px; font-weight: 700; color: var(--text-white, #0F172A); margin-bottom: 6px;">Commission Structure</div>
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary, #64748B);">
           <span>Tier 1 Direct (10%)</span>
           <span>Tier 2 (5%)</span>
           <span>Tier 3 (2%)</span>
@@ -1471,10 +1415,10 @@
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 10px;">
-        <div style="background: rgba(8, 14, 32, 0.7); border-radius: 12px; padding: 12px; border: 1px solid rgba(0, 240, 255, 0.15);">
-          <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: var(--text-white); align-items: center;">
+        <div style="background: var(--bg-card-hover, #F1F5F9); border-radius: 12px; padding: 12px; border: 1px solid var(--border-subtle, #E2E8F0);">
+          <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: var(--text-white, #0F172A); align-items: center;">
             <span style="display: inline-flex; align-items: center; gap: 6px;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00F0FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"></path><path d="m13 19 6-6"></path><path d="m16 16 5.5 5.5"></path></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0284C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"></path><path d="m13 19 6-6"></path><path d="m16 16 5.5 5.5"></path></svg>
               Mining Boost Active
             </span>
             <span style="font-size: 10px; color: var(--text-muted);">10m ago</span>
@@ -1482,8 +1426,8 @@
           <p style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Your Miner #1024 has successfully completed another mining cycle!</p>
         </div>
 
-        <div style="background: rgba(8, 14, 32, 0.7); border-radius: 12px; padding: 12px; border: 1px solid rgba(255, 184, 0, 0.15);">
-          <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: #FFB800; align-items: center;">
+        <div style="background: var(--bg-card-hover, #F1F5F9); border-radius: 12px; padding: 12px; border: 1px solid var(--border-subtle, #E2E8F0);">
+          <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: #D97706; align-items: center;">
             <span style="display: inline-flex; align-items: center; gap: 6px;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"></path></svg>
               VIP Bonus Available
@@ -1496,23 +1440,85 @@
     </div>
   </div>
 
-  <!-- Modal 6: Gift Box Reward Reveal Modal -->
-  <div class="modal-backdrop" id="modal-gift-reveal">
-    <div class="modal-sheet gift-reveal-sheet" style="text-align: center; padding: 24px 20px;">
-      <div class="sheet-handle"></div>
-      <div class="gift-reveal-icon-wrap" style="margin: 8px auto 16px;">
-        <img id="gift-modal-img" src="/assets/images/gifts/gift-btc.jpg" alt="Gift Box" style="width: 120px; height: 120px; object-fit: contain; border-radius: 18px; box-shadow: 0 10px 30px rgba(168, 85, 247, 0.25);" />
+  <!-- Modal 6: Full-Screen Sunburst Gift Reveal Modal (Matching 1st & 2nd Screenshots) -->
+  <div class="gift-fullscreen-modal" id="modal-gift-reveal">
+    <!-- Spinning Sunburst Rays Background -->
+    <div class="gift-sunburst-bg"></div>
+
+    <!-- Falling Money/Coin Confetti Container -->
+    <div class="gift-confetti-container" id="gift-confetti-wrap"></div>
+
+    <!-- Lightning Flash Overlay & Sparks -->
+    <div class="gift-lightning-overlay" id="gift-lightning-flash"></div>
+    <div class="gift-lightning-bolt" id="gift-lightning-bolt"></div>
+
+    <!-- Top Navigation: Close Button -->
+    <div class="gift-modal-top-bar">
+      <button class="gift-modal-close-btn" id="btn-close-gift-modal" aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+        <span>Close</span>
+      </button>
+    </div>
+
+    <!-- STAGE 1: Glowing 3D Gift Box (1st Screenshot) -->
+    <div class="gift-stage-intro" id="gift-stage-intro">
+      <div class="gift-glowing-card-wrap">
+        <img id="gift-modal-img" src="/assets/images/gifts/gift-usdt.png" alt="Glowing Gift Box" class="gift-glowing-card-img" />
       </div>
-      <h3 id="gift-modal-title" style="font-size: 20px; font-weight: 800; color: var(--text-main, #1e293b); margin-bottom: 6px;">BTC Gift Box</h3>
-      <p style="font-size: 13px; color: var(--text-secondary, #64748b); margin-bottom: 18px;">Congratulations! You found a mystery crypto reward.</p>
-      
-      <div style="background: rgba(16, 185, 129, 0.08); border: 1.5px dashed #10b981; border-radius: 14px; padding: 14px 16px; margin-bottom: 22px;">
-        <span style="font-size: 12px; font-weight: 600; color: #059669; text-transform: uppercase; letter-spacing: 0.5px;">Reward Unlocked</span>
-        <div id="gift-reward-val" style="font-size: 26px; font-weight: 900; color: #10b981; margin-top: 4px;">+0.0200 USDT</div>
+    </div>
+
+    <!-- STAGE 2: Custom CryptoMine Reward Reveal Screen -->
+    <div class="gift-stage-reward" id="gift-stage-reward">
+      <!-- Custom Cyber Power Core Card -->
+      <div class="gift-custom-reward-card">
+        <!-- Top Badge -->
+        <div class="gift-power-badge" id="gift-power-badge">
+          <span class="gift-pulse-dot"></span>
+          <span id="gift-power-badge-text">SPEED MULTIPLIER UNLOCKED</span>
+        </div>
+
+        <!-- Center Energy Core Orb -->
+        <div class="gift-energy-core-wrap">
+          <div class="gift-core-glow-ring"></div>
+          <div class="gift-core-inner">
+            <svg class="gift-core-lightning-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="url(#coreGradient)" stroke="#F59E0B"></polygon>
+              <defs>
+                <linearGradient id="coreGradient" x1="3" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#FFE600"/>
+                  <stop offset="1" stop-color="#EA580C"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Value Highlight -->
+        <div class="gift-boost-val-wrap">
+          <span class="gift-boost-val-number" id="gift-boost-percent-num">+0.01$</span>
+          <span class="gift-boost-val-sub" id="gift-boost-val-sub">Daily Mining Reward</span>
+        </div>
+
+        <p class="gift-boost-desc-txt" id="gift-boost-desc-txt">Added directly to your active daily mining rate</p>
       </div>
 
-      <button class="btn-modal-submit" id="btn-claim-gift-reward" style="background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%); color: #fff; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);">
-        <span>Claim Free Coins & USDT</span>
+      <!-- Heading -->
+      <h2 class="gift-reward-congrats" id="gift-reward-congrats">Congratulations!</h2>
+      
+      <!-- Won Subtitle -->
+      <p class="gift-reward-won-txt" id="gift-reward-won-text">You unlocked +0.01$ daily mining reward!</p>
+    </div>
+
+    <!-- Bottom Action Wrap (Visible on Stage 2) -->
+    <div class="gift-reward-bottom-wrap" id="gift-reward-bottom-wrap" style="display: none;">
+      <button class="btn-claim-reward-pill" id="btn-claim-gift-reward">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="#FFE600" stroke="#B45309"></polygon>
+        </svg>
+        <span>Claim Speed Boost</span>
       </button>
     </div>
   </div>

@@ -74,6 +74,8 @@ const ApiService = {
   // User
   getUserProfile() { return this.get('/user/profile'); },
   updateSettings(data) { return this.post('/user/settings', data); },
+  claimGiftBox(data = {}) { return this.post('/user/claim-gift', data); },
+  getGiftBoxInfo() { return this.get('/user/gift-info'); },
 
   // Miner
   getActiveMiner() { return this.get('/miner/active'); },

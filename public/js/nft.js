@@ -45,9 +45,35 @@ const NFTModule = {
       const rarityLower = (nft.rarity || 'common').toLowerCase();
       const rarityClass = `rarity-tag-${rarityLower}`;
       const desc = nft.description || 'Advanced AI miner with high stability.';
+      const isApproved = Boolean(nft.isPurchased || nft.isApproved);
 
       return `
-        <div class="nft-market-card">
+        <div class="nft-market-card ${isApproved ? 'is-approved' : ''}" data-nft-id="${nft.id}">
+          ${isApproved ? `
+            <div class="nft-approved-stamp-wrap">
+              <svg class="nft-approved-seal-svg" viewBox="0 0 200 130">
+                <g transform="rotate(-15 100 65)">
+                  <!-- Outer dashed & solid stamp borders -->
+                  <rect x="6" y="8" width="188" height="114" rx="18" fill="rgba(220, 38, 38, 0.05)" stroke="#DC2626" stroke-width="4" stroke-dasharray="10 3" opacity="0.95" />
+                  <rect x="13" y="15" width="174" height="100" rx="14" fill="none" stroke="#DC2626" stroke-width="1.8" opacity="0.95" />
+                  
+                  <!-- Top Subtext: APPROVED -->
+                  <text x="100" y="34" text-anchor="middle" font-family="'Impact', 'Arial Black', sans-serif" font-size="11" font-weight="900" fill="#DC2626" letter-spacing="4">★ APPROVED ★</text>
+                  <line x1="26" y1="41" x2="174" y2="41" stroke="#DC2626" stroke-width="1.6" />
+                  
+                  <!-- Center Big Bold APPROVED banner -->
+                  <rect x="18" y="47" width="164" height="42" rx="6" fill="#DC2626" opacity="0.14" />
+                  <rect x="18" y="47" width="164" height="42" rx="6" fill="none" stroke="#DC2626" stroke-width="2.2" />
+                  <text x="100" y="77" text-anchor="middle" font-family="'Impact', 'Arial Black', sans-serif" font-size="27" font-weight="900" fill="#DC2626" letter-spacing="3">APPROVED</text>
+                  
+                  <!-- Bottom Subtext: ACTIVE PLAN -->
+                  <line x1="26" y1="95" x2="174" y2="95" stroke="#DC2626" stroke-width="1.6" />
+                  <text x="100" y="108" text-anchor="middle" font-family="'Impact', 'Arial Black', sans-serif" font-size="9.5" font-weight="900" fill="#DC2626" letter-spacing="3">ACTIVE MINING PLAN</text>
+                </g>
+              </svg>
+            </div>
+          ` : ''}
+
           <!-- Top Main Row: Avatar + Info + 3 Stat Badges -->
           <div class="nft-card-main">
             <div class="nft-avatar-box">
@@ -124,15 +150,24 @@ const NFTModule = {
               </div>
             </div>
 
-            <button class="btn-nft-buy-capsule" onclick="NFTModule.confirmBuyNFT('${nft.id}', '${nft.name}', ${nft.price})">
-              <svg class="bolt-icon" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
-              </svg>
-              <span>Buy Now</span>
-              <svg class="arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="9 18 15 12 9 6"></polyline>
-              </svg>
-            </button>
+            ${isApproved ? `
+              <button class="btn-nft-buy-capsule is-approved-btn" disabled title="Already purchased and approved">
+                <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span>Approved</span>
+              </button>
+            ` : `
+              <button class="btn-nft-buy-capsule" onclick="NFTModule.confirmBuyNFT('${nft.id}', '${nft.name}', ${nft.price})">
+                <svg class="bolt-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+                </svg>
+                <span>Buy Now</span>
+                <svg class="arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </button>
+            `}
           </div>
         </div>
       `;
@@ -142,7 +177,14 @@ const NFTModule = {
   confirmBuyNFT(id, name, price) {
     window.TelegramService.hapticImpact('medium');
     const state = window.appState.getState();
-    const nftBal = state.depositBalance ?? 30.00;
+    const currentNFT = (state.nfts || []).find(n => n.id === id || n.id.replace('nft-', '') === String(id).replace('nft-', ''));
+
+    if (currentNFT && (currentNFT.isPurchased || currentNFT.isApproved)) {
+      window.TelegramService.hapticNotification('warning');
+      window.ModalManager.showToast(`✅ You have already purchased ${name}! This plan is Approved and Active.`, 'info');
+      return;
+    }
+
     const totalAvail = (state.depositBalance || 0) + (state.balance || 0);
 
     if (totalAvail < price) {
@@ -187,6 +229,9 @@ const NFTModule = {
         window.MiningModule.setCycleStartTime(res.activeMiner.cycleStartTime || Date.now());
       }
 
+      // Reload NFT marketplace list to immediately show the APPROVED stamp on the purchased card
+      this.loadNFTs(this.currentRarity);
+
       // Switch to Home tab to show active mining
       if (window.App && window.App.switchTab) {
         window.App.switchTab('home');
@@ -194,6 +239,9 @@ const NFTModule = {
 
       window.ModalManager.showToast(`🎉 Deployed ${name}! 24h mining cycle started.`, 'success');
     } else {
+      if (res.isAlreadyOwned) {
+        this.loadNFTs(this.currentRarity);
+      }
       window.ModalManager.showToast(res.message || 'Purchase failed', 'error');
     }
   }

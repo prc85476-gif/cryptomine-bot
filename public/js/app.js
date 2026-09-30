@@ -36,9 +36,10 @@ const App = {
   },
 
   initTheme() {
-    // Default to white/light theme ("backgrount wait koro")
+    // Pure White / Light Theme Default ("sob kisu sada color theme a rakho")
     const savedTheme = localStorage.getItem('cryptomine_theme') || 'light';
-    this.applyTheme(savedTheme);
+    this.applyTheme('light');
+    localStorage.setItem('cryptomine_theme', 'light');
 
     const toggleBtn = document.getElementById('header-theme-toggle-btn');
     if (toggleBtn) {
@@ -200,6 +201,8 @@ const App = {
       window.ReferralModule?.loadReferralData();
     } else if (tabName === 'profile') {
       window.WalletModule.loadProfileWalletStats();
+    } else if (tabName === 'giftbox') {
+      window.GiftBoxModule?.render();
     }
 
     // Scroll to top of content
@@ -346,7 +349,7 @@ const App = {
     if (elProfName) elProfName.textContent = displayName;
     if (elProfUser) elProfUser.textContent = username;
     if (elTgUid) elTgUid.textContent = uid;
-    if (elWallet) elWallet.textContent = user.walletAddress || "EQB...89xY (TON Space)";
+    if (elWallet) elWallet.textContent = (user.walletAddress && !user.walletAddress.includes('...')) ? user.walletAddress : "Not bound yet";
     if (elProfTier) elProfTier.textContent = user.vipTier || "Standard Tier";
     if (elAvatar) elAvatar.src = avatarUrl;
     if (elHeaderAvatar) elHeaderAvatar.src = avatarUrl;

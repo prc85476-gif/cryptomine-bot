@@ -7,6 +7,8 @@ const WalletModule = {
   currentExactAmount: '1.0000',
   depositAddress: '0x91AbcbAbE89945De4e491bf8850Bae836dB66547',
   currentWithdrawNetwork: 'USDT BEP20',
+  savedWalletAddress: null,
+  hasFastMiner: false,
   depositPollInterval: null,
 
   init() {
@@ -543,6 +545,7 @@ const WalletModule = {
             const text = await navigator.clipboard.readText();
             if (text) {
               addrInput.value = text.trim();
+              this.checkWalletAddressState(addrInput.value);
               window.ModalManager.showToast('Wallet address pasted!', 'success');
               return;
             }
@@ -554,10 +557,120 @@ const WalletModule = {
       });
     }
 
+    // Realtime input listener for withdrawal address
+    if (addrInput) {
+      addrInput.addEventListener('input', () => {
+        this.checkWalletAddressState(addrInput.value);
+      });
+    }
+
+    // "Purchase Plan" button in withdrawal address warning bar
+    const buyPlanBtn = document.getElementById('btn-withdraw-buy-plan');
+    if (buyPlanBtn) {
+      buyPlanBtn.addEventListener('click', () => {
+        window.TelegramService.hapticSelection();
+        window.ModalManager.closeModal('modal-withdraw');
+        if (window.App && window.App.switchTab) {
+          window.App.switchTab('nft');
+        }
+      });
+    }
+
+    // "Reset" button to revert back to saved address
+    const resetAddrBtn = document.getElementById('btn-withdraw-reset-addr');
+    if (resetAddrBtn && addrInput) {
+      resetAddrBtn.addEventListener('click', () => {
+        window.TelegramService.hapticSelection();
+        addrInput.value = this.savedWalletAddress || '';
+        this.checkWalletAddressState(addrInput.value);
+        window.ModalManager.showToast('Restored saved wallet address', 'info');
+      });
+    }
+
     // 5. Submit Withdraw Action
     const submitWithBtn = document.getElementById('btn-submit-withdraw');
     if (submitWithBtn) {
       submitWithBtn.addEventListener('click', () => this.handleWithdraw());
+    }
+  },
+
+  /**
+   * Check and display dynamic status for withdrawal address:
+   * - 1st address: informational note that this will be bound
+   * - Address change with NO purchased plan: error state + Purchase Plan button
+   * - Address change WITH purchased plan: success state
+   */
+  checkWalletAddressState(currentInputVal) {
+    const card = document.getElementById('withdraw-wallet-card');
+    const badge = document.getElementById('withdraw-addr-badge');
+    const statusBar = document.getElementById('withdraw-addr-status-bar');
+    const statusIcon = document.getElementById('withdraw-status-icon');
+    const statusText = document.getElementById('withdraw-status-text');
+    const statusActions = document.getElementById('withdraw-status-actions');
+    const inputVal = (currentInputVal || '').trim();
+
+    // Case 1: User has never saved an address yet
+    if (!this.savedWalletAddress) {
+      if (badge) badge.style.display = 'none';
+      if (card) card.classList.remove('has-error', 'has-success');
+
+      if (inputVal.length >= 5) {
+        if (statusBar) {
+          statusBar.style.display = 'flex';
+          statusBar.className = 'withdraw-addr-status-bar status-info';
+        }
+        if (statusIcon) statusIcon.textContent = '💡';
+        if (statusText) statusText.textContent = 'Initial address: This wallet will be bound to your account for future withdrawals.';
+        if (statusActions) statusActions.style.display = 'none';
+      } else {
+        if (statusBar) statusBar.style.display = 'none';
+      }
+      return true;
+    }
+
+    // Case 2: User has a saved address
+    if (badge) {
+      badge.style.display = 'inline-block';
+      badge.textContent = '🔒 Saved';
+    }
+
+    // If matching currently saved address
+    if (!inputVal || inputVal.toLowerCase() === this.savedWalletAddress.toLowerCase()) {
+      if (card) card.classList.remove('has-error', 'has-success');
+      if (statusBar) statusBar.style.display = 'none';
+      if (statusActions) statusActions.style.display = 'none';
+      return true;
+    }
+
+    // Case 3: User entered a NEW/DIFFERENT address
+    if (!this.hasFastMiner) {
+      // Free user: BLOCK with error
+      if (card) {
+        card.classList.add('has-error');
+        card.classList.remove('has-success');
+      }
+      if (statusBar) {
+        statusBar.style.display = 'flex';
+        statusBar.className = 'withdraw-addr-status-bar';
+      }
+      if (statusIcon) statusIcon.textContent = '⚠️';
+      if (statusText) statusText.textContent = 'To change your withdrawal wallet address, you must purchase a mining plan.';
+      if (statusActions) statusActions.style.display = 'flex';
+      return false;
+    } else {
+      // Plan purchased user: ALLOW with positive feedback
+      if (card) {
+        card.classList.remove('has-error');
+        card.classList.add('has-success');
+      }
+      if (statusBar) {
+        statusBar.style.display = 'flex';
+        statusBar.className = 'withdraw-addr-status-bar status-success';
+      }
+      if (statusIcon) statusIcon.textContent = '✨';
+      if (statusText) statusText.textContent = 'Plan Active: Your address will be updated to this new wallet upon withdrawal.';
+      if (statusActions) statusActions.style.display = 'none';
+      return true;
     }
   },
 
@@ -629,6 +742,7 @@ const WalletModule = {
 
   openWithdrawPage() {
     const state = window.appState.getState();
+    const user = state.user || {};
     const availBalEl = document.getElementById('withdraw-avail-bal');
     if (availBalEl) {
       availBalEl.textContent = `${(state.balance || 0).toFixed(4)} USDT`;
@@ -645,6 +759,8 @@ const WalletModule = {
     const minEl = document.getElementById('withdraw-min-limit-val');
     const feeEl = document.getElementById('withdraw-platform-fee-val');
     const amtInput = document.getElementById('withdraw-amount-input');
+    const addrInput = document.getElementById('withdraw-address-input');
+
     if (minEl) minEl.textContent = '0.15 USDT';
     if (feeEl) feeEl.textContent = '0.005 USDT';
     if (amtInput) {
@@ -652,9 +768,35 @@ const WalletModule = {
       amtInput.min = '0.15';
     }
 
+    // Load saved wallet address & plan status
+    const savedAddr = (user.walletAddress && !user.walletAddress.includes('...')) ? user.walletAddress.trim() : null;
+    this.savedWalletAddress = savedAddr;
+    this.hasFastMiner = Boolean(user.hasFastMiner ?? state.hasFastMiner);
+
+    if (addrInput) {
+      addrInput.value = this.savedWalletAddress || '';
+    }
+    this.checkWalletAddressState(addrInput?.value);
+
     this.updateWithdrawCalculation();
 
     window.ModalManager.openModal('modal-withdraw');
+
+    // Background fetch latest wallet info to guarantee up-to-date plan & saved address
+    window.ApiService.getWalletDetails().then(res => {
+      if (res && res.success) {
+        if (res.walletAddress && !res.walletAddress.includes('...')) {
+          this.savedWalletAddress = res.walletAddress.trim();
+        }
+        if (res.hasFastMiner !== undefined) {
+          this.hasFastMiner = Boolean(res.hasFastMiner);
+        }
+        if (addrInput && !addrInput.value && this.savedWalletAddress) {
+          addrInput.value = this.savedWalletAddress;
+        }
+        this.checkWalletAddressState(addrInput?.value);
+      }
+    }).catch(() => {});
 
     // Explicitly render Turnstile once modal becomes visible
     setTimeout(() => {
@@ -731,8 +873,23 @@ const WalletModule = {
       return;
     }
 
-    if (!addr) {
-      window.ModalManager.showToast('Please enter or paste your wallet address', 'error');
+    if (!addr || addr.length < 5) {
+      window.ModalManager.showToast('Please enter a valid crypto withdrawal address', 'error');
+      if (addrInput) addrInput.focus();
+      return;
+    }
+
+    // Check if user is attempting to change an already saved address without a purchased plan
+    if (this.savedWalletAddress && addr.toLowerCase() !== this.savedWalletAddress.toLowerCase() && !this.hasFastMiner) {
+      window.TelegramService.hapticNotification('error');
+      const card = document.getElementById('withdraw-wallet-card');
+      if (card) {
+        card.classList.remove('has-error');
+        void card.offsetWidth;
+        card.classList.add('has-error');
+      }
+      this.checkWalletAddressState(addr);
+      window.ModalManager.showToast('⚠️ To change your withdrawal wallet address, you must purchase a mining plan.', 'error');
       return;
     }
 
@@ -766,19 +923,42 @@ const WalletModule = {
           window.MiningModule.playSuccessSound();
         }
         window.ModalManager.showToast(res.message || 'Withdrawal request submitted successfully!', 'success');
-        window.appState.setState({ balance: res.newBalance });
+        
+        // Save new/confirmed wallet address & fast miner state locally
+        this.savedWalletAddress = res.walletAddress || addr;
+        if (res.hasFastMiner !== undefined) this.hasFastMiner = res.hasFastMiner;
+
+        const curUser = window.appState.getState().user || {};
+        window.appState.setState({
+          balance: res.newBalance,
+          user: {
+            ...curUser,
+            walletAddress: this.savedWalletAddress,
+            hasFastMiner: this.hasFastMiner
+          }
+        });
+
         if (window.MiningModule && window.MiningModule.updateBalanceUI) {
           window.MiningModule.updateBalanceUI(res.newBalance);
         }
         window.ModalManager.closeModal('modal-withdraw');
         if (amtInput) amtInput.value = '';
-        if (addrInput) addrInput.value = '';
         this.turnstileToken = '';
         this.updateWithdrawCalculation();
         this.loadProfileWalletStats();
       } else {
         const errMsg = res?.message || res?.error || 'Withdrawal failed. Please check details and try again.';
-        if (res?.dailyLimitReached) {
+        if (res?.requiresPlan) {
+          window.TelegramService.hapticNotification('error');
+          const card = document.getElementById('withdraw-wallet-card');
+          if (card) {
+            card.classList.remove('has-error');
+            void card.offsetWidth;
+            card.classList.add('has-error');
+          }
+          this.checkWalletAddressState(addr);
+          window.ModalManager.showToast(`⚠️ ${errMsg}`, 'error');
+        } else if (res?.dailyLimitReached) {
           window.TelegramService.hapticImpact('medium');
           window.ModalManager.showToast(errMsg, 'warning');
         } else {

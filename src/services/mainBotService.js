@@ -19,16 +19,35 @@ class MainBotService {
 
     try {
       this.bot = new Bot(token.trim());
-      this.registerHandlers();
 
-      this.bot.startPolling().catch((err) => {
-        console.warn('⚠️ Main Telegram bot polling stopped or failed:', err.message);
+      this.bot.catch((err) => {
+        console.error('⚠️ [Main Bot] Internal update handler error:', err.message || err);
       });
+
+      this.registerHandlers();
+      this.startPollingLoop();
 
       this.isInitialized = true;
       console.log('🤖 Main User Telegram Bot initialized & listening for /start...');
     } catch (err) {
       console.error('❌ Failed to initialize Main Telegram Bot:', err.message);
+    }
+  }
+
+  async startPollingLoop() {
+    if (this.isPollingActive) return;
+    this.isPollingActive = true;
+
+    while (this.isPollingActive) {
+      try {
+        await this.bot.startPolling(undefined, {
+          dropPendingUpdates: false,
+          allowedUpdates: ['message', 'callback_query']
+        });
+      } catch (err) {
+        console.warn('⚠️ [Main Bot] Polling connection notice:', err.message || err, '— Reconnecting in 3s...');
+      }
+      await new Promise(r => setTimeout(r, 3000));
     }
   }
 

@@ -9,6 +9,10 @@ class TelegramBotService {
     this.adminChatId = process.env.ADMIN_CHAT_ID ? Number(process.env.ADMIN_CHAT_ID) || process.env.ADMIN_CHAT_ID : null;
     this.pendingWithdrawals = new Map();
     this.isInitialized = false;
+    this.isPollingActive = false;
+    this.lastUsdtAlertThreshold = null; // Tracks last alerted USDT threshold (5, 4, 3, 2, 1, 0)
+    this.lastBnbAlertState = null; // Tracks 'empty', 'low', 'ok'
+    this.monitorInterval = null;
   }
 
   init() {
@@ -20,30 +24,59 @@ class TelegramBotService {
 
     try {
       this.bot = new Bot(token.trim());
-      this.registerHandlers();
-      
-      // Start polling asynchronously without blocking
-      this.bot.startPolling().catch((err) => {
-        console.warn('⚠️ Telegram polling stopped or failed:', err.message);
+
+      // Global error handler to prevent crashing or polling stoppage
+      this.bot.catch((err) => {
+        console.error('⚠️ [Admin Bot] Internal update handler error:', err.message || err);
       });
+
+      this.registerHandlers();
+      this.startPollingLoop();
 
       this.isInitialized = true;
       console.log('🤖 Telegram Admin Bot initialized & connected with Neon DB (@acryptomintadminwithdraw2bot)...');
+
+      // Start periodic background wallet health & gas fee monitor (every 10 mins)
+      if (this.monitorInterval) clearInterval(this.monitorInterval);
+      this.monitorInterval = setInterval(() => {
+        this.runPeriodicWalletHealthCheck().catch(() => {});
+      }, 10 * 60 * 1000);
+
     } catch (err) {
       console.error('❌ Failed to initialize Telegram Bot:', err.message);
+    }
+  }
+
+  async startPollingLoop() {
+    if (this.isPollingActive) return;
+    this.isPollingActive = true;
+
+    while (this.isPollingActive) {
+      try {
+        console.log('🔄 [Admin Bot] Starting Telegram getUpdates polling...');
+        await this.bot.startPolling(undefined, {
+          dropPendingUpdates: false,
+          allowedUpdates: ['message', 'callback_query']
+        });
+      } catch (err) {
+        console.warn('⚠️ [Admin Bot] Polling connection notice:', err.message || err, '— Reconnecting in 3s...');
+      }
+      // Auto-reconnect delay
+      await new Promise(r => setTimeout(r, 3000));
     }
   }
 
   registerHandlers() {
     if (!this.bot) return;
 
-    // /start command
-    this.bot.command('start', async (ctx) => {
+    // Common Admin Dashboard Dispatcher
+    const handleDashboard = async (ctx) => {
       try {
-        const chatId = ctx.chatId;
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
         const from = ctx.from;
         const userId = from?.id;
-        const username = from?.username ? `@${from.username}` : from?.first_name || 'Admin';
+
+        if (!chatId) return;
 
         // Check if user is banned
         if (userId) {
@@ -68,74 +101,52 @@ class TelegramBotService {
         if (from?.id) {
           await dbService.getUser(from.id, {
             username: from.username || `user_${from.id}`,
-            firstName: from.first_name || 'Miner',
+            firstName: from.first_name || 'Admin',
             lastName: from.last_name || ''
           }).catch(() => {});
         }
 
-        const walletInfo = await payoutService.getWalletInfo();
-
-        let walletStatus = '';
-        if (walletInfo.configured) {
-          walletStatus = `
-💼 <b>Payout Hot Wallet (BEP-20):</b>
-📍 <code>${walletInfo.address}</code>
-💎 <b>USDT:</b> <code>${walletInfo.usdtBalance} USDT</code>
-⛽ <b>BNB Gas:</b> <code>${walletInfo.bnbBalance} BNB</code>
-🔗 <a href="${walletInfo.bscScanUrl}">View on BscScan</a>`;
-        } else {
-          walletStatus = `
-⚠️ <b>Payout Wallet Status:</b> Not configured yet.
-<i>Please add <code>PAYOUT_WALLET_PRIVATE_KEY</code> in your <code>.env</code> file.</i>`;
-        }
-
-        const welcomeMsg = `👋 <b>Welcome ${username}!</b>
-
-🛡️ <b>CryptoMine Admin Bot (Withdrawals & Deposit Alerts)</b>
-━━━━━━━━━━━━━━━━━━━━
-🆔 <b>Your Chat ID:</b> <code>${chatId}</code>
-${this.adminChatId == chatId ? '✅ <b>Role:</b> Active Admin (Receiving Alerts)' : 'ℹ️ Type /setadmin to set this chat as primary admin.'}
-${walletStatus}
-━━━━━━━━━━━━━━━━━━━━
-<b>Available Admin Commands:</b>
-• /balance - Check hot-wallet USDT & BNB Gas
-• /setadmin - Set this chat for instant alerts
-• /ban &lt;uid&gt; - Ban any malicious user
-• /unban &lt;uid&gt; - Unban a user
-• /help - Bot usage & payout guide`;
-
-        await this.bot.api.sendMessage({
-          chat_id: chatId,
-          text: welcomeMsg,
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: '💼 Check Wallet Balance', callback_data: 'cmd_balance' }],
-              [{ text: '🔄 Refresh Status', callback_data: 'cmd_status' }]
-            ]
-          }
-        });
+        await this.sendAdminDashboard(chatId);
       } catch (err) {
-        console.error('Error handling /start:', err.message);
+        console.error('Error handling dashboard command:', err.message);
+      }
+    };
+
+    // Slash command registrations
+    this.bot.command('start', handleDashboard);
+    this.bot.command('admin', handleDashboard);
+    this.bot.command('dashboard', handleDashboard);
+    this.bot.command('stats', handleDashboard);
+
+    // /balance command: Hot-wallet & Gas fee status
+    this.bot.command('balance', async (ctx) => {
+      try {
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (chatId) await this.sendBalanceMessage(chatId);
+      } catch (err) {
+        console.error('Error handling /balance:', err.message);
       }
     });
 
-    // /balance command
-    this.bot.command('balance', async (ctx) => {
+    // /pending command: View pending withdrawals
+    this.bot.command('pending', async (ctx) => {
       try {
-        await this.sendBalanceMessage(ctx.chatId);
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (chatId) await this.sendPendingWithdrawalsMessage(chatId);
       } catch (err) {
-        console.error('Error handling /balance:', err.message);
+        console.error('Error handling /pending:', err.message);
       }
     });
 
     // /setadmin command
     this.bot.command('setadmin', async (ctx) => {
       try {
-        this.adminChatId = ctx.chatId;
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!chatId) return;
+        this.adminChatId = chatId;
         await this.bot.api.sendMessage({
-          chat_id: ctx.chatId,
-          text: `✅ <b>Admin Chat ID Updated!</b>\nAll withdrawal requests & deposit alerts will now be sent here (ID: <code>${ctx.chatId}</code>).`,
+          chat_id: chatId,
+          text: `✅ <b>Admin Chat ID Updated!</b>\nAll withdrawal requests, dashboard updates & risk alerts will now be sent here (ID: <code>${chatId}</code>).`,
           parse_mode: 'HTML'
         });
       } catch (err) {
@@ -146,6 +157,8 @@ ${walletStatus}
     // /testchannel command: Test posting to @cryptomintwithdraw proof channel
     this.bot.command('testchannel', async (ctx) => {
       try {
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!chatId) return;
         await this.broadcastWithdrawalToProofChannel({
           username: ctx.from?.username || 'cryptominer_pro',
           amount: 0.2600,
@@ -156,29 +169,34 @@ ${walletStatus}
         });
 
         await this.bot.api.sendMessage({
-          chat_id: ctx.chatId,
+          chat_id: chatId,
           text: '✅ <b>Test message broadcasted to @cryptomintwithdraw channel!</b>',
           parse_mode: 'HTML'
         });
       } catch (err) {
-        await this.bot.api.sendMessage({
-          chat_id: ctx.chatId,
-          text: `❌ <b>Failed to post to channel:</b> <code>${err.message}</code>\n\nEnsure @acryptomintadminwithdraw2bot is an Admin in @cryptomintwithdraw with post permission.`,
-          parse_mode: 'HTML'
-        });
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (chatId) {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `❌ <b>Failed to post to channel:</b> <code>${err.message}</code>\n\nEnsure @acryptomintadminwithdraw2bot is an Admin in @cryptomintwithdraw with post permission.`,
+            parse_mode: 'HTML'
+          });
+        }
       }
     });
 
     // /ban command: /ban <userId>
     this.bot.command('ban', async (ctx) => {
       try {
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!chatId) return;
         const text = ctx.message?.text || '';
         const parts = text.trim().split(/\s+/);
         const targetId = parts[1];
 
         if (!targetId || isNaN(targetId)) {
           await this.bot.api.sendMessage({
-            chat_id: ctx.chatId,
+            chat_id: chatId,
             text: '⚠️ <b>Usage:</b> <code>/ban &lt;Telegram_User_ID&gt;</code>\nExample: <code>/ban 9482103</code>',
             parse_mode: 'HTML'
           });
@@ -188,7 +206,7 @@ ${walletStatus}
         const bannedUser = await dbService.banUser(targetId);
         if (bannedUser) {
           await this.bot.api.sendMessage({
-            chat_id: ctx.chatId,
+            chat_id: chatId,
             text: `🚫 <b>USER BANNED SUCCESSFULLY!</b>\n\n👤 <b>User:</b> @${bannedUser.username} (<code>${bannedUser.telegramId}</code>)\n📛 <b>Name:</b> ${bannedUser.name}\n🔒 <i>This account is now blocked from the Mini App and Bot.</i>`,
             parse_mode: 'HTML',
             reply_markup: {
@@ -199,7 +217,7 @@ ${walletStatus}
           });
         } else {
           await this.bot.api.sendMessage({
-            chat_id: ctx.chatId,
+            chat_id: chatId,
             text: `⚠️ User with ID <code>${targetId}</code> not found in database.`,
             parse_mode: 'HTML'
           });
@@ -212,13 +230,15 @@ ${walletStatus}
     // /unban command: /unban <userId>
     this.bot.command('unban', async (ctx) => {
       try {
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!chatId) return;
         const text = ctx.message?.text || '';
         const parts = text.trim().split(/\s+/);
         const targetId = parts[1];
 
         if (!targetId || isNaN(targetId)) {
           await this.bot.api.sendMessage({
-            chat_id: ctx.chatId,
+            chat_id: chatId,
             text: '⚠️ <b>Usage:</b> <code>/unban &lt;Telegram_User_ID&gt;</code>\nExample: <code>/unban 9482103</code>',
             parse_mode: 'HTML'
           });
@@ -228,7 +248,7 @@ ${walletStatus}
         const unbannedUser = await dbService.unbanUser(targetId);
         if (unbannedUser) {
           await this.bot.api.sendMessage({
-            chat_id: ctx.chatId,
+            chat_id: chatId,
             text: `✅ <b>USER UNBANNED SUCCESSFULLY!</b>\n\n👤 <b>User:</b> @${unbannedUser.username} (<code>${unbannedUser.telegramId}</code>)\n📛 <b>Name:</b> ${unbannedUser.name}\n🔓 <i>Access has been fully restored.</i>`,
             parse_mode: 'HTML',
             reply_markup: {
@@ -239,7 +259,7 @@ ${walletStatus}
           });
         } else {
           await this.bot.api.sendMessage({
-            chat_id: ctx.chatId,
+            chat_id: chatId,
             text: `⚠️ User with ID <code>${targetId}</code> not found in database.`,
             parse_mode: 'HTML'
           });
@@ -252,15 +272,18 @@ ${walletStatus}
     // /help command
     this.bot.command('help', async (ctx) => {
       try {
-        const helpMsg = `📖 <b>Admin Bot Guide:</b>
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!chatId) return;
+        const helpMsg = `📖 <b>Admin Bot Master Guide:</b>
 ━━━━━━━━━━━━━━━━━━━━
-1. 📥 <b>Withdrawal Requests:</b> When a user withdraws, you get a clean alert here with user details and <b>[Approve & Pay]</b> & <b>[Reject]</b> buttons.
-2. 💸 <b>Automatic Payout & User Alert:</b> Clicking <b>[Approve & Pay]</b> completes the payout, records the TxID, and sends the user their BscScan confirmation card.
-3. 🚫 <b>Account Ban Control:</b> Clicking <b>[Ban Account]</b> immediately locks malicious users from accessing the Mini App and Bot.
-4. 🔄 <b>Refund on Reject:</b> Clicking <b>[Reject]</b> automatically cancels withdrawal and refunds user balance in Neon DB.`;
+1. 🛡️ <b>/start & /admin:</b> Live Master Admin Dashboard with all system metrics, user balances, deposits, approved/pending withdrawals, and wallet gas status.
+2. 📥 <b>Withdrawal Approval:</b> When a user requests withdrawal, you get an instant card with <b>[Approve & Pay]</b> and <b>[Reject]</b>.
+3. 💸 <b>On-Chain Auto Payout:</b> Clicking <b>[Approve & Pay]</b> triggers instant BEP20 USDT payout, broadcasts to @cryptomintwithdraw, and notifies the user.
+4. 🚨 <b>Risk Alerts:</b> Automatic instant notification when Master Wallet USDT balance drops <= $5 (and step updates at $4, $3, $2, $1) or when BNB gas is low/exhausted.
+5. 🚫 <b>User Ban Control:</b> Use <code>/ban &lt;UID&gt;</code> and <code>/unban &lt;UID&gt;</code> to manage users.`;
 
         await this.bot.api.sendMessage({
-          chat_id: ctx.chatId,
+          chat_id: chatId,
           text: helpMsg,
           parse_mode: 'HTML'
         });
@@ -269,37 +292,78 @@ ${walletStatus}
       }
     });
 
-    // Callback query handler (Approve / Reject / Ban / Unban)
+    // Fallback message handler for raw text commands
+    this.bot.on('message:text', async (ctx) => {
+      const text = (ctx.message?.text || '').trim();
+      if (text === '/start' || text.startsWith('/start') || text === '/admin' || text === '/dashboard' || text === '/stats') {
+        await handleDashboard(ctx);
+      }
+    });
+
+    // Callback query handler
     this.bot.on('callback_query', async (ctx) => {
       try {
-        const callbackQuery = ctx.callbackQuery;
+        const callbackQuery = ctx.callbackQuery || ctx.update?.callback_query;
         if (!callbackQuery) return;
 
         const data = callbackQuery.data;
-        const chatId = callbackQuery.message?.chat?.id || ctx.chatId;
+        const chatId = callbackQuery.message?.chat?.id || ctx.chatId || ctx.from?.id;
         const messageId = callbackQuery.message?.message_id;
 
-        if (data === 'cmd_balance' || data === 'cmd_status') {
+        // Answer callback query immediately to stop UI loading spinner
+        await this.bot.api.answerCallbackQuery({
+          callback_query_id: callbackQuery.id
+        }).catch(() => {});
+
+        if (!data) return;
+
+        // Navigation callbacks
+        if (data === 'cmd_dashboard' || data === 'cmd_status' || data === 'cmd_refresh') {
+          await this.sendAdminDashboard(chatId, messageId);
+          return;
+        }
+
+        if (data === 'cmd_balance') {
           await this.sendBalanceMessage(chatId);
-          await this.bot.api.answerCallbackQuery({ callback_query_id: callbackQuery.id });
+          return;
+        }
+
+        if (data === 'cmd_pending') {
+          await this.sendPendingWithdrawalsMessage(chatId);
+          return;
+        }
+
+        if (data === 'cmd_testchannel') {
+          try {
+            await this.broadcastWithdrawalToProofChannel({
+              username: callbackQuery.from?.username || 'admin_test',
+              amount: 0.2600,
+              fromAddress: '0x9cccFDFfa030A90bEBd73c7dB610B5E05Eb8Bd040a6',
+              toAddress: '0xc1e779a78e778401fa9bb270d4c82b9a71726bd',
+              txHash: '0x932070f170ae4930c8e86d71a7dd993e06fea72d24ac5afbfd1d6af7174cc1ce',
+              bscScanUrl: 'https://bscscan.com/tx/0x932070f170ae4930c8e86d71a7dd993e06fea72d24ac5afbfd1d6af7174cc1ce'
+            });
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: '✅ <b>Test message broadcasted to @cryptomintwithdraw proof channel!</b>',
+              parse_mode: 'HTML'
+            });
+          } catch (e) {
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: `❌ <b>Failed to post to channel:</b> <code>${e.message}</code>`,
+              parse_mode: 'HTML'
+            });
+          }
           return;
         }
 
         const [action, targetId] = data.split(':');
-        if (!action || !targetId) {
-          await this.bot.api.answerCallbackQuery({ callback_query_id: callbackQuery.id });
-          return;
-        }
+        if (!action || !targetId) return;
 
         // --- BAN ACTION ---
         if (action === 'ban') {
           await dbService.banUser(targetId);
-          await this.bot.api.answerCallbackQuery({
-            callback_query_id: callbackQuery.id,
-            text: `🚫 Account #${targetId} has been BANNED!`,
-            show_alert: true
-          });
-
           await this.bot.api.sendMessage({
             chat_id: chatId,
             text: `🚫 <b>ACCOUNT BANNED:</b> User ID <code>${targetId}</code> is now blocked from the Mini App and Bot.`,
@@ -316,12 +380,6 @@ ${walletStatus}
         // --- UNBAN ACTION ---
         if (action === 'unban') {
           await dbService.unbanUser(targetId);
-          await this.bot.api.answerCallbackQuery({
-            callback_query_id: callbackQuery.id,
-            text: `✅ Account #${targetId} has been UNBANNED!`,
-            show_alert: true
-          });
-
           await this.bot.api.sendMessage({
             chat_id: chatId,
             text: `✅ <b>ACCOUNT RESTORED:</b> User ID <code>${targetId}</code> can now use the Mini App and Bot.`,
@@ -339,36 +397,33 @@ ${walletStatus}
         const txId = targetId;
         const withdrawal = this.pendingWithdrawals.get(txId);
         if (!withdrawal) {
-          await this.bot.api.answerCallbackQuery({
-            callback_query_id: callbackQuery.id,
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
             text: '⚠️ This withdrawal request has already been processed or expired.',
-            show_alert: true
+            parse_mode: 'HTML'
           });
           return;
         }
 
         if (withdrawal.status !== 'Pending') {
-          await this.bot.api.answerCallbackQuery({
-            callback_query_id: callbackQuery.id,
-            text: `⚠️ Request already ${withdrawal.status}.`,
-            show_alert: true
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `⚠️ Request <code>${txId}</code> was already ${withdrawal.status}.`,
+            parse_mode: 'HTML'
           });
           return;
         }
 
         if (action === 'approve') {
-          await this.bot.api.answerCallbackQuery({
-            callback_query_id: callbackQuery.id,
-            text: '⏳ Initiating On-Chain Transfer...'
-          });
-
           // Edit admin message to processing state
-          await this.bot.api.editMessageText({
-            chat_id: chatId,
-            message_id: messageId,
-            text: `⏳ <b>Processing On-Chain Payout...</b>\n━━━━━━━━━━━━━━━━━━━━\n🆔 <b>Tx ID:</b> <code>${txId}</code>\n💎 <b>Sending:</b> <code>${withdrawal.finalReceived} USDT (BEP20)</code>\n📍 <b>To:</b> <code>${withdrawal.address}</code>\n<i>Connecting to BNB Smart Chain...</i>`,
-            parse_mode: 'HTML'
-          });
+          if (messageId) {
+            await this.bot.api.editMessageText({
+              chat_id: chatId,
+              message_id: messageId,
+              text: `⏳ <b>Processing On-Chain Payout...</b>\n━━━━━━━━━━━━━━━━━━━━\n🆔 <b>Tx ID:</b> <code>${txId}</code>\n💎 <b>Sending:</b> <code>${withdrawal.finalReceived} USDT (BEP20)</code>\n📍 <b>To:</b> <code>${withdrawal.address}</code>\n<i>Connecting to BNB Smart Chain...</i>`,
+              parse_mode: 'HTML'
+            }).catch(() => {});
+          }
 
           try {
             // Execute on-chain payout
@@ -408,7 +463,7 @@ ${walletStatus}
               bscScanUrl: payoutResult.bscScanUrl
             }).catch((e) => console.warn('Proof channel broadcast error:', e.message));
 
-            // Clean concise summary for Admin Bot (no BscScan preview/card on admin chat, goes to user)
+            // Clean concise summary for Admin Bot
             const adminSuccessText = `✅ <b>WITHDRAWAL APPROVED & PAID!</b>
 ━━━━━━━━━━━━━━━━━━━━
 🆔 <b>Tx ID:</b> <code>${txId}</code>
@@ -419,18 +474,33 @@ ${walletStatus}
 ━━━━━━━━━━━━━━━━━━━━
 ⚡ <i>Payout completed! User has been sent their BscScan transaction link and confirmation card.</i>`;
 
-            await this.bot.api.editMessageText({
-              chat_id: chatId,
-              message_id: messageId,
-              text: adminSuccessText,
-              parse_mode: 'HTML',
-              disable_web_page_preview: true,
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: '🚫 Ban User', callback_data: `ban:${withdrawal.userId}` }]
-                ]
-              }
-            });
+            if (messageId) {
+              await this.bot.api.editMessageText({
+                chat_id: chatId,
+                message_id: messageId,
+                text: adminSuccessText,
+                parse_mode: 'HTML',
+                disable_web_page_preview: true,
+                reply_markup: {
+                  inline_keyboard: [
+                    [{ text: '🚫 Ban User', callback_data: `ban:${withdrawal.userId}` }],
+                    [{ text: '🔄 Admin Dashboard', callback_data: 'cmd_dashboard' }]
+                  ]
+                }
+              });
+            } else {
+              await this.bot.api.sendMessage({
+                chat_id: chatId,
+                text: adminSuccessText,
+                parse_mode: 'HTML',
+                disable_web_page_preview: true
+              });
+            }
+
+            // Trigger real-time wallet risk alert check after payout
+            setTimeout(() => {
+              this.runPeriodicWalletHealthCheck().catch(() => {});
+            }, 3000);
 
           } catch (payoutErr) {
             console.error('❌ On-Chain Payout Error:', payoutErr.message);
@@ -446,27 +516,27 @@ ${walletStatus}
 ━━━━━━━━━━━━━━━━━━━━
 <i>Check your wallet BNB gas / USDT balance and retry, or reject & refund.</i>`;
 
-            await this.bot.api.editMessageText({
-              chat_id: chatId,
-              message_id: messageId,
-              text: errorText,
-              parse_mode: 'HTML',
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: '🔄 Retry Payout', callback_data: `approve:${txId}` }],
-                  [{ text: '❌ Reject & Refund', callback_data: `reject:${txId}` }],
-                  [{ text: '🚫 Ban User', callback_data: `ban:${withdrawal.userId}` }]
-                ]
-              }
-            });
+            if (messageId) {
+              await this.bot.api.editMessageText({
+                chat_id: chatId,
+                message_id: messageId,
+                text: errorText,
+                parse_mode: 'HTML',
+                reply_markup: {
+                  inline_keyboard: [
+                    [{ text: '🔄 Retry Payout', callback_data: `approve:${txId}` }],
+                    [{ text: '❌ Reject & Refund', callback_data: `reject:${txId}` }],
+                    [{ text: '🚫 Ban User', callback_data: `ban:${withdrawal.userId}` }]
+                  ]
+                }
+              });
+            }
+
+            // Trigger wallet alert check on failure
+            this.runPeriodicWalletHealthCheck().catch(() => {});
           }
 
         } else if (action === 'reject') {
-          await this.bot.api.answerCallbackQuery({
-            callback_query_id: callbackQuery.id,
-            text: '❌ Request Rejected. Balance refunded.'
-          });
-
           withdrawal.status = 'Rejected';
           this.pendingWithdrawals.set(txId, withdrawal);
 
@@ -500,18 +570,21 @@ ${walletStatus}
 ━━━━━━━━━━━━━━━━━━━━
 🔄 <i>The requested amount has been refunded back to user's withdrawable balance in Neon DB.</i>`;
 
-          await this.bot.api.editMessageText({
-            chat_id: chatId,
-            message_id: messageId,
-            text: rejectText,
-            parse_mode: 'HTML',
-            disable_web_page_preview: true,
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: '🚫 Ban User', callback_data: `ban:${withdrawal.userId}` }]
-              ]
-            }
-          });
+          if (messageId) {
+            await this.bot.api.editMessageText({
+              chat_id: chatId,
+              message_id: messageId,
+              text: rejectText,
+              parse_mode: 'HTML',
+              disable_web_page_preview: true,
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: '🚫 Ban User', callback_data: `ban:${withdrawal.userId}` }],
+                  [{ text: '🔄 Admin Dashboard', callback_data: 'cmd_dashboard' }]
+                ]
+              }
+            });
+          }
         }
       } catch (err) {
         console.error('Error handling callback query:', err.message);
@@ -519,16 +592,298 @@ ${walletStatus}
     });
   }
 
+  /**
+   * Render and send/edit the Complete Master Admin Dashboard
+   */
+  async sendAdminDashboard(chatId, messageId = null) {
+    if (!this.bot) return;
+
+    try {
+      const stats = await dbService.getAdminSystemStats();
+      const walletInfo = await payoutService.getWalletInfo();
+
+      const usdtVal = parseFloat(walletInfo.usdtBalance || 0);
+      const bnbVal = parseFloat(walletInfo.bnbBalance || 0);
+
+      // Status badges
+      let usdtBadge = '🟢 Healthy';
+      if (!walletInfo.configured) {
+        usdtBadge = '⚪ Not Configured';
+      } else if (usdtVal <= 1.0) {
+        usdtBadge = '🚨 CRITICAL LOW (< $1)';
+      } else if (usdtVal <= 5.0) {
+        usdtBadge = `⚠️ LOW FUND ALERT ($${usdtVal.toFixed(2)})`;
+      }
+
+      let bnbBadge = '🟢 Gas OK';
+      if (!walletInfo.configured) {
+        bnbBadge = '⚪ Not Configured';
+      } else if (bnbVal <= 0.0005) {
+        bnbBadge = '🚨 GAS DEPLETED (0 BNB)';
+      } else if (bnbVal < 0.003) {
+        bnbBadge = `⚠️ LOW GAS (${bnbVal.toFixed(5)} BNB)`;
+      }
+
+      const nowTimeStr = new Date().toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+
+      const dashboardText = `🛡️ <b>CRYPTOMINE MASTER ADMIN DASHBOARD</b>
+━━━━━━━━━━━━━━━━━━━━
+👥 <b>USER BASE OVERVIEW:</b>
+• 👤 <b>Total Registered Users:</b> <code>${stats.totalUsers}</code>
+• ⚡ <b>Active Users (24h):</b> <code>${stats.activeUsers24h}</code>
+• 🚫 <b>Banned Accounts:</b> <code>${stats.bannedUsers}</code>
+
+💰 <b>FINANCIAL & BALANCES (SYSTEM):</b>
+• 💎 <b>Total User Balance (Withdrawable):</b> <code>${stats.totalUserBalance} USDT</code>
+• 🛍️ <b>Total Deposit / NFT Balance:</b> <code>${stats.totalDepositBalance} USDT</code>
+• 💵 <b>Total Overall User Funds:</b> <code>${stats.totalUserFunds} USDT</code>
+
+💼 <b>MASTER PAYOUT HOT WALLET:</b>
+• 📍 <b>Address:</b> <code>${walletInfo.address || 'Not Configured (.env)'}</code>
+• 💎 <b>USDT Balance:</b> <code>${walletInfo.usdtBalance || '0.0000'} USDT</code> [${usdtBadge}]
+• ⛽ <b>BNB Gas Balance:</b> <code>${walletInfo.bnbBalance || '0.00000'} BNB</code> [${bnbBadge}]
+
+📥 <b>DEPOSITS (ON-CHAIN):</b>
+• 📈 <b>Total Deposited:</b> <code>+${stats.totalDepositedAmount} USDT</code> (<b>${stats.totalDepositsCount}</b> txs)
+
+📤 <b>WITHDRAWALS & PAYOUTS:</b>
+• ✅ <b>Total Approved & Paid:</b> <code>${stats.totalWithdrawnAmount} USDT</code> (<b>${stats.totalWithdrawnCount}</b> txs)
+• ⏳ <b>Pending Requests:</b> <code>${stats.pendingWithdrawalsCount}</code> requests (<code>${stats.pendingWithdrawalsAmount} USDT</code>)
+
+⛏️ <b>MINING & NFT MARKETPLACE:</b>
+• 🤖 <b>Active Miners:</b> <code>${stats.totalActiveMiners}</code>
+• 📦 <b>Purchased Plans:</b> <code>${stats.totalPurchasedPlans}</code>
+• ⚡ <b>Daily Mining Output:</b> <code>${stats.totalDailyMiningRate} USDT/day</code>
+━━━━━━━━━━━━━━━━━━━━
+⏰ <b>Last Synced:</b> <i>${nowTimeStr} UTC</i>`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: '🔄 Refresh Dashboard', callback_data: 'cmd_dashboard' },
+            { text: '💼 Check Wallet', callback_data: 'cmd_balance' }
+          ],
+          [
+            { text: `📋 Pending Requests (${stats.pendingWithdrawalsCount})`, callback_data: 'cmd_pending' },
+            { text: '📢 Test Proof Post', callback_data: 'cmd_testchannel' }
+          ],
+          [
+            { text: '🔍 View Hot Wallet on BscScan', url: walletInfo.bscScanUrl || 'https://bscscan.com' }
+          ]
+        ]
+      };
+
+      if (messageId) {
+        await this.bot.api.editMessageText({
+          chat_id: chatId,
+          message_id: messageId,
+          text: dashboardText,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: keyboard
+        }).catch(async () => {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: dashboardText,
+            parse_mode: 'HTML',
+            disable_web_page_preview: true,
+            reply_markup: keyboard
+          });
+        });
+      } else {
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          text: dashboardText,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: keyboard
+        });
+      }
+
+      // Check and send wallet risk alerts if needed
+      this.checkAndSendWalletRiskAlerts(walletInfo, chatId).catch(() => {});
+
+    } catch (err) {
+      console.error('Error in sendAdminDashboard:', err);
+    }
+  }
+
+  /**
+   * Check Master Wallet Balances and send Risk SMS/Telegram Alerts to Admin
+   */
+  async checkAndSendWalletRiskAlerts(walletInfo, targetChatId = null) {
+    if (!this.bot) return;
+    const destChatId = targetChatId || this.adminChatId || process.env.ADMIN_CHAT_ID;
+    if (!destChatId) return;
+
+    if (!walletInfo || !walletInfo.configured) return;
+
+    const usdtBal = parseFloat(walletInfo.usdtBalance || 0);
+    const bnbBal = parseFloat(walletInfo.bnbBalance || 0);
+
+    // 1. USDT Balance Risk Alert (<= $5.00, <= $4.00, <= $3.00, <= $2.00, <= $1.00, etc.)
+    if (usdtBal <= 5.0) {
+      const currentThreshold = Math.floor(usdtBal); // 5, 4, 3, 2, 1, 0
+      if (this.lastUsdtAlertThreshold !== currentThreshold) {
+        this.lastUsdtAlertThreshold = currentThreshold;
+
+        const isCritical = usdtBal <= 1.0;
+        const alertTitle = isCritical 
+          ? `🚨 <b>CRITICAL WALLET FUND RISK ALERT!</b>` 
+          : `⚠️ <b>WALLET FUND RISK ALERT: Master Payout Balance Low!</b>`;
+
+        const usdtAlertMsg = `${alertTitle}
+━━━━━━━━━━━━━━━━━━━━
+⚠️ <b>Abnormal Transaction Risk / Low Balance Warning!</b>
+💰 <b>Current USDT Balance:</b> <code>${walletInfo.usdtBalance} USDT</code>
+📍 <b>Payout Wallet:</b> <code>${walletInfo.address}</code>
+━━━━━━━━━━━━━━━━━━━━
+${isCritical 
+  ? `❌ <b>CRITICAL:</b> Balance is critically low (<b>${walletInfo.usdtBalance} USDT</b>). Immediate deposit required to prevent payout execution failures!` 
+  : `⚠️ <b>ALERT:</b> Master wallet balance has dropped below <b>$5.00 USDT</b> (Currently: <b>${walletInfo.usdtBalance} USDT</b>). Please replenish USDT to ensure uninterrupted automated payouts.`}
+━━━━━━━━━━━━━━━━━━━━
+🔗 <a href="${walletInfo.bscScanUrl}">View Payout Wallet on BscScan</a>`;
+
+        await this.bot.api.sendMessage({
+          chat_id: destChatId,
+          text: usdtAlertMsg,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🔍 View on BscScan', url: walletInfo.bscScanUrl }],
+              [{ text: '🔄 Refresh Status', callback_data: 'cmd_dashboard' }]
+            ]
+          }
+        }).catch((e) => console.warn('Could not send USDT risk alert:', e.message));
+      }
+    } else {
+      this.lastUsdtAlertThreshold = null; // Reset when balance restored
+    }
+
+    // 2. BNB Gas Fee Alert (< 0.003 BNB or < 0.0005 BNB)
+    if (bnbBal < 0.003) {
+      const bnbState = bnbBal <= 0.0005 ? 'empty' : 'low';
+      if (this.lastBnbAlertState !== bnbState) {
+        this.lastBnbAlertState = bnbState;
+
+        const isGasEmpty = bnbState === 'empty';
+        const gasTitle = isGasEmpty 
+          ? `🚨 <b>CRITICAL BNB GAS FEE ALERT: Gas Exhausted!</b>` 
+          : `⛽ <b>BNB GAS FEE ALERT: Gas Balance Low!</b>`;
+
+        const bnbAlertMsg = `${gasTitle}
+━━━━━━━━━━━━━━━━━━━━
+⛽ <b>Current BNB Gas Balance:</b> <code>${walletInfo.bnbBalance} BNB</code>
+📍 <b>Payout Wallet:</b> <code>${walletInfo.address}</code>
+━━━━━━━━━━━━━━━━━━━━
+${isGasEmpty 
+  ? `❌ <b>GAS EMPTY:</b> BNB balance is 0 or depleted (<b>${walletInfo.bnbBalance} BNB</b>). All on-chain BEP-20 transfers are BLOCKED because network gas cannot be paid! Please deposit BNB immediately.` 
+  : `⚠️ <b>LOW GAS:</b> BNB balance is low (<b>${walletInfo.bnbBalance} BNB</b>). Payouts may fail if gas runs out completely. Please top up BNB for network transaction fees.`}
+━━━━━━━━━━━━━━━━━━━━
+🔗 <a href="${walletInfo.bscScanUrl}">View Payout Wallet on BscScan</a>`;
+
+        await this.bot.api.sendMessage({
+          chat_id: destChatId,
+          text: bnbAlertMsg,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🔍 View on BscScan', url: walletInfo.bscScanUrl }],
+              [{ text: '🔄 Refresh Status', callback_data: 'cmd_dashboard' }]
+            ]
+          }
+        }).catch((e) => console.warn('Could not send BNB gas alert:', e.message));
+      }
+    } else {
+      this.lastBnbAlertState = 'ok';
+    }
+  }
+
+  /**
+   * Run background check for wallet balances and risk thresholds
+   */
+  async runPeriodicWalletHealthCheck() {
+    try {
+      const walletInfo = await payoutService.getWalletInfo();
+      if (walletInfo.configured) {
+        await this.checkAndSendWalletRiskAlerts(walletInfo);
+      }
+    } catch (e) {
+      console.warn('runPeriodicWalletHealthCheck warning:', e.message);
+    }
+  }
+
+  /**
+   * Send Pending Withdrawals List to Admin
+   */
+  async sendPendingWithdrawalsMessage(chatId) {
+    if (!this.bot) return;
+
+    try {
+      const txRes = await dbService.getTransactions(null, 10);
+      const pendingTxs = (txRes || []).filter(t => t.status === 'Pending');
+
+      if (pendingTxs.length === 0 && this.pendingWithdrawals.size === 0) {
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          text: `✅ <b>No Pending Withdrawals!</b>\nAll user withdrawal requests have been processed and paid out.`,
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🔄 Refresh Dashboard', callback_data: 'cmd_dashboard' }]
+            ]
+          }
+        });
+        return;
+      }
+
+      let msg = `📋 <b>PENDING WITHDRAWAL REQUESTS (${pendingTxs.length}):</b>\n━━━━━━━━━━━━━━━━━━━━\n`;
+      pendingTxs.forEach((tx, idx) => {
+        msg += `${idx + 1}. 🆔 <code>${tx.id}</code>\n   👤 User: <code>${tx.userId}</code> | 💰 <b>${tx.amount}</b>\n   📍 To: <code>${tx.recipientAddress || 'N/A'}</code>\n\n`;
+      });
+      msg += `<i>Use the inline action cards above or click Approve & Pay to process.</i>`;
+
+      await this.bot.api.sendMessage({
+        chat_id: chatId,
+        text: msg,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔄 Refresh Dashboard', callback_data: 'cmd_dashboard' }]
+          ]
+        }
+      });
+    } catch (err) {
+      console.error('Error in sendPendingWithdrawalsMessage:', err);
+    }
+  }
+
   async sendBalanceMessage(chatId) {
     if (!this.bot) return;
     const walletInfo = await payoutService.getWalletInfo();
 
     if (walletInfo.configured) {
+      const usdtVal = parseFloat(walletInfo.usdtBalance || 0);
+      const bnbVal = parseFloat(walletInfo.bnbBalance || 0);
+
+      const usdtStatus = usdtVal <= 5.0 ? `⚠️ Low (< $5.00)` : `🟢 Healthy`;
+      const bnbStatus = bnbVal < 0.003 ? `⚠️ Low Gas` : `🟢 Sufficient`;
+
       const msg = `💼 <b>Payout Hot Wallet (BEP-20)</b>
 ━━━━━━━━━━━━━━━━━━━━
 📍 <b>Address:</b> <code>${walletInfo.address}</code>
-💎 <b>USDT Balance:</b> <code>${walletInfo.usdtBalance} USDT</code>
-⛽ <b>BNB Gas Balance:</b> <code>${walletInfo.bnbBalance} BNB</code>
+💎 <b>USDT Balance:</b> <code>${walletInfo.usdtBalance} USDT</code> [${usdtStatus}]
+⛽ <b>BNB Gas Balance:</b> <code>${walletInfo.bnbBalance} BNB</code> [${bnbStatus}]
 ━━━━━━━━━━━━━━━━━━━━
 • 🔍 <a href="${walletInfo.bscScanUrl}"><b>View Wallet on BscScan</b></a>`;
 
@@ -540,10 +895,12 @@ ${walletStatus}
         reply_markup: {
           inline_keyboard: [
             [{ text: '🔍 View on BscScan', url: walletInfo.bscScanUrl }],
-            [{ text: '🔄 Refresh Balance', callback_data: 'cmd_balance' }]
+            [{ text: '🔄 Refresh Dashboard', callback_data: 'cmd_dashboard' }]
           ]
         }
       });
+
+      this.checkAndSendWalletRiskAlerts(walletInfo, chatId).catch(() => {});
     } else {
       await this.bot.api.sendMessage({
         chat_id: chatId,
@@ -632,10 +989,29 @@ ${walletStatus}
   }
 
   /**
-   * Send Clean Withdrawal Request to Admin Telegram (No BscScan preview on pending admin request)
+   * Send Clean & Detailed Withdrawal Request to Admin Telegram
    */
   async notifyWithdrawalRequest(withdrawalData) {
-    const { txId, userId, username, amount, fee, finalReceived, address, network } = withdrawalData;
+    const {
+      txId,
+      userId,
+      username,
+      name,
+      amount,
+      fee,
+      finalReceived,
+      address,
+      network,
+      mainBalance,
+      depositBalance,
+      totalBalance,
+      totalWithdrawn,
+      totalDeposited,
+      totalReferrals,
+      activeMinersCount,
+      minerName,
+      miningRate
+    } = withdrawalData;
 
     // Save to pending map
     this.pendingWithdrawals.set(txId, {
@@ -656,18 +1032,34 @@ ${walletStatus}
     }
 
     const nowUtc = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+    const computedTotalBal = totalBalance !== undefined ? parseFloat(totalBalance).toFixed(4) : (parseFloat(mainBalance || 0) + parseFloat(depositBalance || 0)).toFixed(4);
 
     const alertMessage = `🚨 <b>NEW WITHDRAWAL REQUEST</b> 🚨
 ━━━━━━━━━━━━━━━━━━━━
 🆔 <b>Tx ID:</b> <code>${txId}</code>
 👤 <b>User:</b> @${username || 'Anonymous'} (UID: <code>${userId}</code>)
-💵 <b>Requested Amount:</b> <code>${amount.toFixed(4)} USDT</code>
-⛽ <b>Network Fee:</b> <code>${fee.toFixed(4)} USDT</code>
-💎 <b>Net to Send:</b> <code>${finalReceived.toFixed(4)} USDT</code>
-🌐 <b>Network:</b> ${network || 'BEP-20 (BNB Chain)'}
-📍 <b>Destination Wallet:</b>
+📛 <b>Name:</b> ${name || 'Alex Miner'}
+━━━━━━━━━━━━━━━━━━━━
+💰 <b>USER BALANCE & PROFILE:</b>
+• 💎 <b>Main (Withdrawable):</b> <code>${parseFloat(mainBalance || 0).toFixed(4)} USDT</code>
+• 🛍️ <b>NFT / Deposit Bal:</b> <code>${parseFloat(depositBalance || 0).toFixed(2)} USDT</code>
+• 💵 <b>Total User Balance:</b> <code>${computedTotalBal} USDT</code>
+• 📤 <b>Total Withdrawn:</b> <code>${parseFloat(totalWithdrawn || 0).toFixed(4)} USDT</code>
+• 📈 <b>Total Deposited:</b> <code>+${parseFloat(totalDeposited || 0).toFixed(2)} USDT</code>
+━━━━━━━━━━━━━━━━━━━━
+📊 <b>USER ACTIVITY & STATS:</b>
+• 👥 <b>Total Referrals:</b> <b>${totalReferrals || 0} Users</b>
+• 🤖 <b>Active Miners:</b> <b>${activeMinersCount || 1} Active</b> (<code>${minerName || 'Cyber Bot #1024'}</code>)
+• ⚡ <b>Daily Mining Rate:</b> <code>${parseFloat(miningRate || 0.0200).toFixed(4)} USDT/day</code>
+━━━━━━━━━━━━━━━━━━━━
+💵 <b>WITHDRAWAL SPECIFICS:</b>
+• 💵 <b>Requested Amount:</b> <code>${amount.toFixed(4)} USDT</code>
+• ⛽ <b>Network Fee:</b> <code>${fee.toFixed(4)} USDT</code>
+• 💎 <b>Net to Send:</b> <code>${finalReceived.toFixed(4)} USDT</code>
+• 🌐 <b>Network:</b> ${network || 'USDT BEP-20 (BNB Smart Chain)'}
+• 📍 <b>Destination Wallet:</b>
 <code>${address}</code>
-⏰ <b>Time:</b> ${nowUtc}
+• ⏰ <b>Time:</b> ${nowUtc}
 ━━━━━━━━━━━━━━━━━━━━
 <i>Click Approve & Pay to execute payout.</i>`;
 
@@ -726,7 +1118,6 @@ ${walletStatus}
     const toShort = formatShort(toAddress);
     const cleanBscUrl = bscScanUrl || `https://bscscan.com/tx/${txHash}`;
 
-    // Format Time: e.g. Sep 29, 2026, 9:57:51 PM
     const timeStr = new Date().toLocaleString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -737,6 +1128,8 @@ ${walletStatus}
       hour12: true
     });
 
+    const botUsername = (process.env.BOT_USERNAME || 'cryptomintnftbot').replace(/^@/, '');
+
     const channelMessage = `🚀 <b>New Withdrawal Confirmed! (BSC Network)</b>
 
 🌐 <b>Username:</b> ${cleanUsername}
@@ -745,6 +1138,7 @@ ${walletStatus}
 📥 <b>To:</b> <code>${toShort}</code>
 🌐 <b>Network:</b> Binance Smart Chain (BEP-20)
 🕒 <b>Time:</b> ${timeStr}
+🤖 <b>Bot:</b> @${botUsername}
 
 🔗 <a href="${cleanBscUrl}">View on BscScan</a>`;
 
