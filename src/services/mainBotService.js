@@ -158,24 +158,38 @@ class MainBotService {
           }
         }
 
-        // If local video upload was not completed, try sending via static URL
-        if (!videoSent && appUrl && appUrl.startsWith('https://')) {
-          try {
-            const videoUrl = `${appUrl.replace(/\/+$/, '')}/assets/videos/welcome.mp4`;
-            await this.bot.api.sendVideo({
-              chat_id: chatId,
-              video: videoUrl,
-              caption: welcomeMessage,
-              parse_mode: 'HTML',
-              reply_markup: replyMarkup
-            });
-            videoSent = true;
-          } catch (urlErr) {
-            console.warn('sendVideo via static URL error:', urlErr.message);
+        // If local video upload was not completed, try sending via static URL or photo
+        if (!videoSent) {
+          const photoCandidates = [
+            path.join(process.cwd(), 'public/assets/images/invite-banner.png'),
+            path.join(__dirname, '../../public/assets/images/invite-banner.png'),
+            path.join(process.cwd(), 'public/assets/images/nft/miner-robot.png'),
+            path.join(__dirname, '../../public/assets/images/nft/miner-robot.png')
+          ];
+          let validPhotoPath = null;
+          for (const cand of photoCandidates) {
+            if (fs.existsSync(cand)) {
+              validPhotoPath = cand;
+              break;
+            }
+          }
+          if (validPhotoPath && InputFile) {
+            try {
+              await this.bot.api.sendPhoto({
+                chat_id: chatId,
+                photo: new InputFile(validPhotoPath),
+                caption: welcomeMessage,
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup
+              });
+              videoSent = true;
+            } catch (photoErr) {
+              console.warn('sendPhoto error in /start, trying fallback:', photoErr.message);
+            }
           }
         }
 
-        // Fallback to text message if video delivery fails
+        // Fallback to text message if media delivery fails
         if (!videoSent) {
           await this.bot.api.sendMessage({
             chat_id: chatId,
