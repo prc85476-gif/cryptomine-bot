@@ -407,8 +407,7 @@ class MainBotService {
   async notifyReferrerNewUser(referrerId, newUsername, newFirstName) {
     if (!referrerId) return;
     try {
-      const name = newUsername ? `@${newUsername.replace(/^@/, '')}` : (newFirstName || 'Miner');
-      const msg = `🎉 <b>New Referral Joined!</b> 👥\n━━━━━━━━━━━━━━━━━━━━\n👤 <b>${name}</b> just joined CryptoMine using your referral link!\n\n💎 <i>You will earn up to 10% daily commission from their mining rewards and upgrades!</i>`;
+      const msg = `🎉 <b>New Referral Joined!</b> 👥`;
       await this.sendMessageToUser(referrerId, {
         text: msg,
         parse_mode: 'HTML'
@@ -422,10 +421,10 @@ class MainBotService {
    * Send notification to referrer when commission is earned
    */
   async notifyReferrerCommission(referrerId, amount, tier, sourceAction) {
-    if (!referrerId || !amount || amount <= 0) return;
+    if (!referrerId) return;
     try {
-      const formatted = parseFloat(amount).toFixed(4);
-      const msg = `💰 <b>Referral Commission Earned!</b> ⚡\n━━━━━━━━━━━━━━━━━━━━\n💸 <b>+${formatted} USDT</b> credited to your balance!\n📊 <b>Tier:</b> Tier ${tier}\n🎯 <b>Source:</b> ${sourceAction || 'Activity'}\n\n💎 <i>Keep sharing your referral link to earn more lifetime commissions!</i>`;
+      const amtStr = (amount && Number(amount) > 0) ? `${parseFloat(amount).toFixed(2)}$` : '0.02$';
+      const msg = `🎉  <b>Referral comition ${amtStr}!</b> 👥`;
       await this.sendMessageToUser(referrerId, {
         text: msg,
         parse_mode: 'HTML'
