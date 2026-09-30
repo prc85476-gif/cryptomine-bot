@@ -85,50 +85,21 @@ class MainBotService {
         // 2. Extract referral payload if present (/start <refCode>)
         const text = ctx.message?.text || '';
         const parts = text.trim().split(/\s+/);
-        let referrerId = null;
+        let refParam = null;
 
-        if (parts.length > 1) {
-          const refParam = parts[1].trim();
-          try {
-            referrerId = await dbService.findReferrerIdByCode(refParam);
-            if (referrerId && Number(referrerId) === Number(userId)) {
-              referrerId = null; // Cannot refer oneself
-            }
-          } catch (e) {
-            console.warn('Referral param lookup warning:', e.message);
-          }
+        if (parts.length > 1 && parts[1].trim()) {
+          refParam = parts[1].trim();
         }
 
-        // 3. Register or get user from Neon DB
-        const user = await dbService.getUser(userId, {
-          username: from?.username || `user_${userId}`,
-          firstName,
-          lastName,
-          referrerId,
-          startParam: parts.length > 1 ? parts[1].trim() : null
-        }).catch((err) => {
-          console.error('Error in main bot getUser:', err.message);
-          return null;
-        });
-
-        if (user && user.isBanned) {
-          await this.bot.api.sendMessage({
-            chat_id: chatId,
-            text: `🚫 <b>MULTIPLE ID / ACCOUNT BANNED!</b>\n━━━━━━━━━━━━━━━━━━━━\n⚠️ <i>Multiple accounts from the same device / IP address are strictly prohibited.</i>\n\n🔒 Your account has been suspended for violating our single-account policy.\n\n📞 <b>Contact Support:</b> @CryptoMint_Support_bot`,
-            parse_mode: 'HTML',
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: '📞 Contact Support', url: 'https://t.me/CryptoMint_Support_bot' }]
-              ]
-            }
-          });
-          return;
+        // 3. Prepare Mini App WebApp URL (Passing referral code so referral is only counted when Mini App is opened)
+        const baseAppUrl = (process.env.MINI_APP_URL || 'https://cryptomine-app.com').trim();
+        let appUrl = baseAppUrl;
+        if (refParam) {
+          const sep = baseAppUrl.includes('?') ? '&' : '?';
+          appUrl = `${baseAppUrl}${sep}startapp=${encodeURIComponent(refParam)}&ref=${encodeURIComponent(refParam)}&tgWebAppStartParam=${encodeURIComponent(refParam)}`;
         }
 
-        // 4. Prepare Mini App WebApp URL
-        const appUrl = (process.env.MINI_APP_URL || 'https://cryptomine-app.com').trim();
-
-        // 5. Rich Welcome Message Caption
+        // 4. Rich Welcome Message Caption
         const welcomeMessage = `👋 <b>Welcome ${firstName}!</b> 💎⚡
 
 🤖 <b>CryptoMine — NFT & Cloud Mining</b>
