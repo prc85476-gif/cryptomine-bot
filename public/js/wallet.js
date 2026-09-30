@@ -326,7 +326,7 @@ const WalletModule = {
       verifyBtn.addEventListener('click', async () => {
         window.TelegramService.hapticImpact('medium');
         const verifyTextEl = document.getElementById('btn-verify-deposit-text');
-        const origHtml = verifyTextEl ? verifyTextEl.innerHTML : `⚡ I have paid • Verify Deposit (${parseFloat(this.currentDepositAmount).toFixed(2)} USDT)`;
+        const origHtml = verifyTextEl ? verifyTextEl.innerHTML : `⚡ I have paid • Verify Deposit (${this.currentExactAmount || parseFloat(this.currentDepositAmount).toFixed(4)} USDT)`;
         
         verifyBtn.disabled = true;
         if (verifyTextEl) {
@@ -387,7 +387,7 @@ const WalletModule = {
       verifyBtn.classList.remove('btn-verified-success');
     }
     if (verifyTextEl) {
-      verifyTextEl.innerHTML = `<span>⚡ I have paid • Verify Deposit (${amountNum.toFixed(2)} USDT)</span>`;
+      verifyTextEl.innerHTML = `<span>⚡ I have paid • Verify Deposit (${this.currentExactAmount || amountNum.toFixed(4)} USDT)</span>`;
     }
 
     // Show loading state on button while registering deposit intent
@@ -433,7 +433,7 @@ const WalletModule = {
     if (addrEl) addrEl.textContent = this.depositAddress || '0x91AbcbAbE89945De4e491bf8850Bae836dB66547';
 
     if (verifyTextEl) {
-      verifyTextEl.innerHTML = `<span>⚡ I have paid • Verify Deposit (${amountNum.toFixed(2)} USDT)</span>`;
+      verifyTextEl.innerHTML = `<span>⚡ I have paid • Verify Deposit (${this.currentExactAmount || amountNum.toFixed(4)} USDT)</span>`;
     }
 
     // Update dynamic QR Code
