@@ -69,7 +69,7 @@ exports.mineNow = async (req, res) => {
 
     const now = Date.now();
     const elapsedMs = Math.max(0, now - miner.cycleStartTime);
-    const isReady = elapsedMs >= CYCLE_DURATION_MS || req.body.forceTest === true;
+    const isReady = elapsedMs >= CYCLE_DURATION_MS;
     const remainingMs = Math.max(0, CYCLE_DURATION_MS - elapsedMs);
 
     if (!isReady) {
@@ -138,21 +138,11 @@ exports.mineNow = async (req, res) => {
 };
 
 exports.fastForwardMining = async (req, res) => {
-  try {
-    const updatedMiner = await dbService.updateActiveMiner(req.userId, {
-      cycleStartTime: Date.now() - (CYCLE_DURATION_MS + 1000)
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: "24-Hour Mining Cycle is now completed and ready to claim!",
-      cycleStartTime: updatedMiner.cycleStartTime,
-      claimableReward: updatedMiner.dailyReward
-    });
-  } catch (err) {
-    console.error('minerController.fastForwardMining error:', err);
-    return res.status(500).json({ success: false, error: err.message });
-  }
+  return res.status(403).json({
+    success: false,
+    error: "FORBIDDEN",
+    message: "Debug and fast-forward actions are disabled in production environment for security."
+  });
 };
 
 exports.upgradeMiner = async (req, res) => {

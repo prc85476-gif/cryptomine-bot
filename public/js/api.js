@@ -94,6 +94,10 @@ function getTelegramHeaders() {
     'x-device-fingerprint': getDeviceFingerprint()
   };
   try {
+    const initData = window.Telegram?.WebApp?.initData || '';
+    if (initData) {
+      headers['x-telegram-init-data'] = initData;
+    }
     const tgUser = window.TelegramService?.getUser ? window.TelegramService.getUser() : null;
     if (tgUser && tgUser.id) {
       headers['x-telegram-user-id'] = String(tgUser.id);

@@ -2,6 +2,7 @@ const dbService = require('../services/dbService');
 const telegramBotService = require('../services/telegramBotService');
 const mainBotService = require('../services/mainBotService');
 const depositWatcherService = require('../services/depositWatcherService');
+const { ethers } = require('ethers');
 
 exports.getWalletDetails = async (req, res) => {
   try {
@@ -80,65 +81,24 @@ exports.checkDepositStatus = async (req, res) => {
 
 exports.deposit = async (req, res) => {
   try {
-    const { amount, network, txHash } = req.body;
-    const depositAmt = parseFloat(amount) || 3.0;
-
-    if (depositAmt <= 0) {
-      return res.status(400).json({ success: false, message: "Invalid deposit amount" });
+    // Deposits are strictly validated through on-chain blockchain monitoring
+    const status = await depositWatcherService.checkStatus(req.userId);
+    if (!status || !status.confirmed) {
+      return res.status(400).json({
+        success: false,
+        error: "UNVERIFIED_DEPOSIT",
+        message: "No confirmed on-chain deposit found. Please transfer the exact USDT amount to the provided deposit address and wait for BSC block confirmation."
+      });
     }
 
     const user = await dbService.getUser(req.userId, req.userMeta);
-    const newDepositBalance = parseFloat((user.depositBalance + depositAmt).toFixed(4));
-    const newTotalDeposited = parseFloat((user.totalDeposited + depositAmt).toFixed(4));
-
-    // Update in Neon Database: deposit_balance and total_deposited
-    await dbService.updateUser(req.userId, {
-      depositBalance: newDepositBalance,
-      totalDeposited: newTotalDeposited
-    });
-
-    const shortHash = txHash ? `${txHash.substring(0, 6)}...${txHash.substring(txHash.length - 4)}` : null;
-    const txId = `tx-${Date.now()}`;
-
-    // Add transaction to Neon Database
-    await dbService.addTransaction({
-      id: txId,
-      userId: req.userId,
-      type: `Deposit NFT Fund (${network || 'BEP20'})${shortHash ? ' - ' + shortHash : ''}`,
-      amount: `+${depositAmt.toFixed(4)} USDT`,
-      txHash: txHash || null,
-      network: network || 'USDT BEP20',
-      status: "Completed",
-      positive: true,
-      date: "Just now"
-    });
-
-    // Fetch referral count for rich Telegram alert
-    const refData = await dbService.getReferrals(req.userId);
-
-    // Send Instant Rich Deposit Notification to Admin Telegram Bot with BscScan Link and Ban / Unban actions
-    telegramBotService.notifyDepositAlert({
-      userId: user.telegramId,
-      username: user.username,
-      name: user.name || `${user.firstName} ${user.lastName}`.trim(),
-      amount: depositAmt,
-      network: network || 'USDT BEP20',
-      txHash: txHash || 'N/A',
-      depositBalance: newDepositBalance,
-      mainBalance: user.balance,
-      totalDeposited: newTotalDeposited,
-      totalReferrals: refData.invitedCount || 0
-    }).catch((botErr) => {
-      console.warn('Could not dispatch Telegram deposit alert:', botErr.message);
-    });
-
     return res.status(200).json({
       success: true,
-      message: `Deposit verified & confirmed! +${depositAmt.toFixed(2)} USDT added to your NFT Purchase Balance in Neon Database.`,
+      message: `On-chain deposit confirmed! +${status.baseAmount} USDT credited to your account.`,
       newBalance: user.balance,
-      depositBalance: newDepositBalance,
-      totalDeposited: newTotalDeposited,
-      txId
+      depositBalance: user.depositBalance,
+      totalDeposited: user.totalDeposited,
+      txHash: status.txHash
     });
   } catch (err) {
     console.error('walletController.deposit error:', err);
@@ -179,6 +139,13 @@ exports.withdraw = async (req, res) => {
       });
     }
 
+    if (isBep20 && !ethers.isAddress(trimmedAddress)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid BEP-20 (BSC) wallet address format! Address must be a valid 42-character 0x... address."
+      });
+    }
+
     const currentSavedAddr = (user.walletAddress && !user.walletAddress.includes('...')) ? user.walletAddress.trim() : null;
 
     // Daily Withdrawal Limit check (Free/Starter: 2 times daily. Fast Miner/Purchased: 5 times daily)
@@ -216,15 +183,17 @@ exports.withdraw = async (req, res) => {
     // Cloudflare Turnstile Verification (if provided)
     if (turnstileToken) {
       try {
-        const cfSecret = '0x4AAAAAAFHWuB54UEvkuKEt';
-        const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `secret=${encodeURIComponent(cfSecret)}&response=${encodeURIComponent(turnstileToken)}`
-        });
-        const cfData = await verifyRes.json();
-        if (cfData && cfData.success === false) {
-          console.warn('Turnstile verification failed:', cfData);
+        const cfSecret = process.env.CLOUDFLARE_TURNSTILE_SECRET_KEY;
+        if (cfSecret) {
+          const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `secret=${encodeURIComponent(cfSecret)}&response=${encodeURIComponent(turnstileToken)}`
+          });
+          const cfData = await verifyRes.json();
+          if (cfData && cfData.success === false) {
+            console.warn('Turnstile verification failed:', cfData);
+          }
         }
       } catch (err) {
         console.warn('Turnstile verification request error:', err.message);
@@ -234,19 +203,22 @@ exports.withdraw = async (req, res) => {
     const finalReceived = parseFloat(Math.max(0, withdrawAmt - fee).toFixed(4));
     const txId = `tx-${Date.now()}`;
 
-    const newBalance = parseFloat((user.balance - withdrawAmt).toFixed(4));
-    const newTotalWithdrawn = parseFloat((user.totalWithdrawn + withdrawAmt).toFixed(4));
-
-    // Update in Neon Database (balance, totalWithdrawn, and save/update walletAddress if new or permitted change)
-    const userUpdates = {
-      balance: newBalance,
-      totalWithdrawn: newTotalWithdrawn
-    };
+    // Atomic Database Deduction with zero race-condition window
+    const userUpdates = {};
     if (!currentSavedAddr || currentSavedAddr.toLowerCase() !== trimmedAddress.toLowerCase()) {
       userUpdates.walletAddress = trimmedAddress;
     }
 
-    await dbService.updateUser(req.userId, userUpdates);
+    const updatedUser = await dbService.atomicDeductBalance(req.userId, withdrawAmt, userUpdates);
+    if (!updatedUser) {
+      return res.status(400).json({
+        success: false,
+        message: "Insufficient withdrawable balance or withdrawal conflict. Please refresh and try again."
+      });
+    }
+
+    const newBalance = updatedUser.balance;
+    const newTotalWithdrawn = updatedUser.totalWithdrawn;
 
     // Add Pending Transaction in Neon Database
     await dbService.addTransaction({

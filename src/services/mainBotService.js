@@ -11,9 +11,9 @@ class MainBotService {
   }
 
   init() {
-    const token = process.env.MAIN_BOT_TOKEN || '8661464093:AAHyisARtmO8ky21lvYZSttz-XXzDt56HV8';
+    const token = process.env.MAIN_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
     if (!token || token.trim() === '' || token.includes('YOUR_BOT_TOKEN')) {
-      console.warn('⚠️ Main Telegram Bot Token is not set. Main user bot skipped.');
+      console.warn('⚠️ Main Telegram Bot Token is not set in environment. Main user bot skipped.');
       return;
     }
 

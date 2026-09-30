@@ -430,6 +430,47 @@ class DBService {
   }
 
   /**
+   * Atomic balance deduction with database-level concurrency protection against double withdrawals
+   */
+  async atomicDeductBalance(userId, amount, extraUpdates = {}) {
+    try {
+      const tgId = Number(userId) || 9482103;
+      const deductAmt = parseFloat(amount);
+      if (isNaN(deductAmt) || deductAmt <= 0) {
+        throw new Error('Invalid deduction amount');
+      }
+
+      let walletUpdateClause = '';
+      const params = [deductAmt, tgId];
+
+      if (extraUpdates.walletAddress) {
+        params.push(extraUpdates.walletAddress);
+        walletUpdateClause = `, wallet_address = $3`;
+      }
+
+      const res = await db.query(`
+        UPDATE users
+        SET balance = balance - $1,
+            total_withdrawn = total_withdrawn + $1,
+            updated_at = NOW()
+            ${walletUpdateClause}
+        WHERE telegram_id = $2 AND balance >= $1
+        RETURNING *;
+      `, params);
+
+      if (res.rows.length === 0) {
+        return null; // Insufficient balance or concurrency conflict
+      }
+
+      return this.formatUser(res.rows[0]);
+    } catch (err) {
+      console.error('DBService.atomicDeductBalance Error:', err);
+      throw err;
+    }
+  }
+
+
+  /**
    * Get Active Miner for user from Neon Database
    */
   async getActiveMiner(userId = 9482103) {

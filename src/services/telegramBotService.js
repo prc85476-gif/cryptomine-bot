@@ -16,9 +16,9 @@ class TelegramBotService {
   }
 
   init() {
-    const token = process.env.ADMIN_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || '8736676113:AAEbK8OCu4BexMZOz9xsVGHqXXoEnOs4_SM';
+    const token = process.env.ADMIN_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
     if (!token || token.trim() === '' || token.includes('YOUR_BOT_TOKEN')) {
-      console.warn('⚠️ Telegram Bot Token is not set in .env. Bot notifications will be skipped.');
+      console.warn('⚠️ Admin Telegram Bot Token is not set in environment. Bot notifications will be skipped.');
       return;
     }
 
