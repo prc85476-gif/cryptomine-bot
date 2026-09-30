@@ -12,11 +12,11 @@ async function initDatabase() {
         username VARCHAR(100),
         first_name VARCHAR(100),
         last_name VARCHAR(100),
-        balance NUMERIC(18, 4) DEFAULT 25.4867,
-        deposit_balance NUMERIC(18, 4) DEFAULT 30.0000,
-        ton_balance NUMERIC(18, 4) DEFAULT 4.8200,
-        total_earned NUMERIC(18, 4) DEFAULT 14.4630,
-        total_withdrawn NUMERIC(18, 4) DEFAULT 12.0000,
+        balance NUMERIC(18, 4) DEFAULT 0.0000,
+        deposit_balance NUMERIC(18, 4) DEFAULT 0.0000,
+        ton_balance NUMERIC(18, 4) DEFAULT 0.0000,
+        total_earned NUMERIC(18, 4) DEFAULT 0.0000,
+        total_withdrawn NUMERIC(18, 4) DEFAULT 0.0000,
         total_deposited NUMERIC(18, 4) DEFAULT 0.0000,
         mining_rate NUMERIC(18, 4) DEFAULT 0.0200,
         referral_code VARCHAR(50) UNIQUE,
@@ -37,21 +37,27 @@ async function initDatabase() {
       WHERE wallet_address LIKE '%EQB...%' OR wallet_address LIKE '%TON Space%';
     `).catch(() => {});
 
-    // Ensure is_banned & gift box columns exist for existing tables
+    // Ensure is_banned & gift box columns exist with 0 initial values
     await db.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE;
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS gift_boxes_available INT DEFAULT 2;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS gift_boxes_available INT DEFAULT 1;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS gift_boxes_opened INT DEFAULT 0;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_speed_bonus NUMERIC(18, 4) DEFAULT 0.0000;
-    `);
+      ALTER TABLE users ALTER COLUMN balance SET DEFAULT 0.0000;
+      ALTER TABLE users ALTER COLUMN deposit_balance SET DEFAULT 0.0000;
+      ALTER TABLE users ALTER COLUMN ton_balance SET DEFAULT 0.0000;
+      ALTER TABLE users ALTER COLUMN total_earned SET DEFAULT 0.0000;
+      ALTER TABLE users ALTER COLUMN total_withdrawn SET DEFAULT 0.0000;
+      ALTER TABLE users ALTER COLUMN total_deposited SET DEFAULT 0.0000;
+    `).catch(() => {});
 
-    // 2. Active Miners Table (Free Starter Miner: 0.02 USDT/day for 20 days)
+    // 2. Active Miners Table (Free Starter Miner: 0.02 USDT/day for 10 days = 0.20 USDT total)
     await db.query(`
       CREATE TABLE IF NOT EXISTS active_miners (
         id SERIAL PRIMARY KEY,
         user_id BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
-        miner_id VARCHAR(50) NOT NULL DEFAULT '1024',
-        name VARCHAR(100) NOT NULL DEFAULT 'Cyber Bot #1024',
+        miner_id VARCHAR(50) NOT NULL DEFAULT 'starter',
+        name VARCHAR(100) NOT NULL DEFAULT 'Free Starter Miner',
         level INT DEFAULT 1,
         rarity VARCHAR(50) DEFAULT 'Common',
         status VARCHAR(50) DEFAULT 'Active',
@@ -59,8 +65,8 @@ async function initDatabase() {
         daily_reward NUMERIC(18, 4) DEFAULT 0.0200,
         total_claim NUMERIC(18, 4) DEFAULT 0.0000,
         total_reward NUMERIC(18, 4) DEFAULT 0.0000,
-        max_reward NUMERIC(18, 4) DEFAULT 0.4000,
-        mining_days INT DEFAULT 20,
+        max_reward NUMERIC(18, 4) DEFAULT 0.2000,
+        mining_days INT DEFAULT 10,
         days_completed INT DEFAULT 0,
         power_hashrate VARCHAR(50) DEFAULT '50 MH/s',
         upgrade_cost NUMERIC(18, 4) DEFAULT 0.5000,
@@ -110,7 +116,7 @@ async function initDatabase() {
     // Ensure no strict FK on referred_id so un-onboarded invited users can still be tracked
     await db.query(`
       ALTER TABLE referrals DROP CONSTRAINT IF EXISTS referrals_referred_id_fkey;
-    `);
+    `).catch(() => {});
 
     // 5. Streaks & Tasks Table
     await db.query(`
@@ -139,75 +145,7 @@ async function initDatabase() {
       );
     `);
 
-    // Check if default test/admin user exists, if not seed initial record
-    const userCheck = await db.query('SELECT * FROM users WHERE telegram_id = $1', [9482103]);
-    if (userCheck.rows.length === 0) {
-      await db.query(`
-        INSERT INTO users (
-          telegram_id, username, first_name, last_name,
-          balance, deposit_balance, ton_balance, total_earned,
-          total_withdrawn, total_deposited, mining_rate, referral_code,
-          vip_tier, vip_power_multiplier, wallet_address, avatar, is_banned
-        ) VALUES (
-          9482103, 'cryptominer_pro', 'Alex', 'Miner',
-          25.4867, 30.0000, 4.8200, 14.4630,
-          12.0000, 0.0000, 0.0200, 'CRYPTO-9482',
-          'Standard Tier', 1.00, NULL, '/assets/images/nft/miner-robot.png', false
-        );
-      `);
-    }
-
-    // Fix sequence if needed
-    await db.query(`
-      SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id), 1) FROM users));
-    `);
-
-    // Seed Active Miner if not exists (Free Starter Mining: 0.02 USDT/day for 10 days = 0.20 USDT total)
-    const minerCheck = await db.query('SELECT * FROM active_miners WHERE user_id = $1', [9482103]);
-    if (minerCheck.rows.length === 0) {
-      await db.query(`
-        INSERT INTO active_miners (
-          user_id, miner_id, name, level, rarity, status,
-          purchase_price, daily_reward, total_claim, total_reward, max_reward,
-          mining_days, days_completed, power_hashrate, upgrade_cost,
-          next_level, next_level_reward, next_level_hashrate, image, cycle_start_time
-        ) VALUES (
-          9482103, 'starter', 'Free Starter Miner', 1, 'Common', 'Active',
-          0.0000, 0.0200, 0.0000, 0.0000, 0.2000,
-          10, 0, '50 MH/s', 0.5000,
-          2, 0.0500, '100 MH/s', '/assets/images/nft/miner-robot.png', $1
-        );
-      `, [Date.now()]);
-    }
-
-    // Seed Streaks/Tasks if not exists
-    const streakCheck = await db.query('SELECT * FROM streaks_tasks WHERE user_id = $1', [9482103]);
-    if (streakCheck.rows.length === 0) {
-      await db.query(`
-        INSERT INTO streaks_tasks (
-          user_id, streak_current_day, streak_claimed_today, streak_last_claim_date, completed_task_ids
-        ) VALUES (
-          9482103, 1, false, null, '{task-tg-sub,task-yt-sub}'
-        );
-      `);
-    }
-
-    // Seed Referrals if none exist
-    const refCheck = await db.query('SELECT * FROM referrals WHERE referrer_id = $1', [9482103]);
-    if (refCheck.rows.length === 0) {
-      await db.query(`
-        INSERT INTO referrals (referrer_id, referred_id, username, first_name, level, commission_earned)
-        VALUES
-          (9482103, 89101, 'crypto_king99', 'David', 1, 2.5000),
-          (9482103, 89102, 'elena_ton', 'Elena', 1, 1.8500),
-          (9482103, 89103, 'sam_miner', 'Samir', 2, 1.2000),
-          (9482103, 89104, 'john_btc', 'John', 2, 0.8000),
-          (9482103, 89105, 'lisa_gem', 'Lisa', 3, 0.5000)
-        ON CONFLICT DO NOTHING;
-      `);
-    }
-
-    console.log('✅ Neon PostgreSQL Database Initialized & Seeded Successfully!');
+    console.log('✅ Neon PostgreSQL Database Initialized Successfully with 0 Balances!');
     return true;
   } catch (err) {
     console.error('❌ Neon Database Initialization Error:', err);

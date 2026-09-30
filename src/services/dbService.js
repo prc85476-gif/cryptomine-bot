@@ -115,8 +115,8 @@ class DBService {
           gift_boxes_available, gift_boxes_opened, daily_speed_bonus
         ) VALUES (
           $1, $2, $3, $4,
-          25.4867, 30.0000, 4.8200, 14.4630,
-          12.0000, 0.0000, 0.0200, $5,
+          0.0000, 0.0000, 0.0000, 0.0000,
+          0.0000, 0.0000, 0.0200, $5,
           $6, 'Standard Tier', 1.00, null, $7, false,
           1, 0, 0.0000
         ) RETURNING *;

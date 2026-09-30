@@ -66,6 +66,27 @@ class TelegramBotService {
     }
   }
 
+  isAuthorizedAdmin(from) {
+    if (!from) return false;
+    const username = (from.username || '').replace(/^@/, '').toLowerCase();
+    const userId = from.id;
+
+    // Strict Authorization: ONLY @ownerof421 (case-insensitive) can access
+    if (username === 'ownerof421') return true;
+
+    // If explicit admin username is configured in environment
+    if (process.env.ADMIN_USERNAME && username === process.env.ADMIN_USERNAME.replace(/^@/, '').toLowerCase()) {
+      return true;
+    }
+
+    // If explicit admin chat ID is configured in environment
+    if (process.env.ADMIN_CHAT_ID && String(userId) === String(process.env.ADMIN_CHAT_ID)) {
+      return true;
+    }
+
+    return false;
+  }
+
   registerHandlers() {
     if (!this.bot) return;
 
@@ -78,6 +99,20 @@ class TelegramBotService {
 
         if (!chatId) return;
 
+        // Strict Authorization Guard: Only @ownerof421
+        if (!this.isAuthorizedAdmin(from)) {
+          console.warn(`⛔ [Admin Bot] Unauthorized access attempt by ${from?.username || from?.id} (Chat ID: ${chatId})`);
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: '⛔ <b>Access Denied!</b>\nThis Admin Control Bot is strictly restricted. Only <b>@ownerof421</b> is authorized to access and control this system.',
+            parse_mode: 'HTML'
+          });
+          return;
+        }
+
+        // Set as active adminChatId for alerts and notifications
+        this.adminChatId = chatId;
+
         // Check if user is banned
         if (userId) {
           const isBanned = await dbService.isUserBanned(userId);
@@ -89,12 +124,6 @@ class TelegramBotService {
             });
             return;
           }
-        }
-
-        // Automatically set as admin if not already configured
-        if (!this.adminChatId) {
-          this.adminChatId = chatId;
-          console.log(`📌 Admin Chat ID automatically set to: ${chatId}`);
         }
 
         // Register or fetch user in Neon DB
@@ -122,6 +151,16 @@ class TelegramBotService {
     this.bot.command('balance', async (ctx) => {
       try {
         const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!this.isAuthorizedAdmin(ctx.from)) {
+          if (chatId) {
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: '⛔ <b>Access Denied!</b>\nOnly <b>@ownerof421</b> can access this bot.',
+              parse_mode: 'HTML'
+            });
+          }
+          return;
+        }
         if (chatId) await this.sendBalanceMessage(chatId);
       } catch (err) {
         console.error('Error handling /balance:', err.message);
@@ -132,6 +171,16 @@ class TelegramBotService {
     this.bot.command('pending', async (ctx) => {
       try {
         const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!this.isAuthorizedAdmin(ctx.from)) {
+          if (chatId) {
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: '⛔ <b>Access Denied!</b>\nOnly <b>@ownerof421</b> can access this bot.',
+              parse_mode: 'HTML'
+            });
+          }
+          return;
+        }
         if (chatId) await this.sendPendingWithdrawalsMessage(chatId);
       } catch (err) {
         console.error('Error handling /pending:', err.message);
@@ -142,6 +191,16 @@ class TelegramBotService {
     this.bot.command('setadmin', async (ctx) => {
       try {
         const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!this.isAuthorizedAdmin(ctx.from)) {
+          if (chatId) {
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: '⛔ <b>Access Denied!</b>\nOnly <b>@ownerof421</b> can access this bot.',
+              parse_mode: 'HTML'
+            });
+          }
+          return;
+        }
         if (!chatId) return;
         this.adminChatId = chatId;
         await this.bot.api.sendMessage({
@@ -158,9 +217,19 @@ class TelegramBotService {
     this.bot.command('testchannel', async (ctx) => {
       try {
         const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!this.isAuthorizedAdmin(ctx.from)) {
+          if (chatId) {
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: '⛔ <b>Access Denied!</b>\nOnly <b>@ownerof421</b> can access this bot.',
+              parse_mode: 'HTML'
+            });
+          }
+          return;
+        }
         if (!chatId) return;
         await this.broadcastWithdrawalToProofChannel({
-          username: ctx.from?.username || 'cryptominer_pro',
+          username: ctx.from?.username || 'ownerof421',
           amount: 0.2600,
           fromAddress: '0x9cccFDFfa030A90bEBd73c7dB610B5E05Eb8Bd040a6',
           toAddress: '0xc1e779a78e778401fa9bb270d4c82b9a71726bd',
@@ -189,6 +258,16 @@ class TelegramBotService {
     this.bot.command('ban', async (ctx) => {
       try {
         const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!this.isAuthorizedAdmin(ctx.from)) {
+          if (chatId) {
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: '⛔ <b>Access Denied!</b>\nOnly <b>@ownerof421</b> can access this bot.',
+              parse_mode: 'HTML'
+            });
+          }
+          return;
+        }
         if (!chatId) return;
         const text = ctx.message?.text || '';
         const parts = text.trim().split(/\s+/);
@@ -231,6 +310,16 @@ class TelegramBotService {
     this.bot.command('unban', async (ctx) => {
       try {
         const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!this.isAuthorizedAdmin(ctx.from)) {
+          if (chatId) {
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: '⛔ <b>Access Denied!</b>\nOnly <b>@ownerof421</b> can access this bot.',
+              parse_mode: 'HTML'
+            });
+          }
+          return;
+        }
         if (!chatId) return;
         const text = ctx.message?.text || '';
         const parts = text.trim().split(/\s+/);
@@ -273,6 +362,16 @@ class TelegramBotService {
     this.bot.command('help', async (ctx) => {
       try {
         const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!this.isAuthorizedAdmin(ctx.from)) {
+          if (chatId) {
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: '⛔ <b>Access Denied!</b>\nOnly <b>@ownerof421</b> can access this bot.',
+              parse_mode: 'HTML'
+            });
+          }
+          return;
+        }
         if (!chatId) return;
         const helpMsg = `📖 <b>Admin Bot Master Guide:</b>
 ━━━━━━━━━━━━━━━━━━━━
@@ -309,6 +408,18 @@ class TelegramBotService {
         const data = callbackQuery.data;
         const chatId = callbackQuery.message?.chat?.id || ctx.chatId || ctx.from?.id;
         const messageId = callbackQuery.message?.message_id;
+        const from = callbackQuery.from;
+
+        // Strict authorization check for callbacks
+        if (!this.isAuthorizedAdmin(from)) {
+          console.warn(`⛔ [Admin Bot] Unauthorized callback attempt by ${from?.username || from?.id}`);
+          await this.bot.api.answerCallbackQuery({
+            callback_query_id: callbackQuery.id,
+            text: '⛔ Access Denied! Only @ownerof421 is authorized.',
+            show_alert: true
+          }).catch(() => {});
+          return;
+        }
 
         // Answer callback query immediately to stop UI loading spinner
         await this.bot.api.answerCallbackQuery({

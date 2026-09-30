@@ -6,15 +6,15 @@ const mockDatabase = {
     name: "Alex Miner",
     username: "@cryptominer_pro",
     avatar: "/assets/images/nft/miner-robot.png",
-    depositBalance: 30.00, // Deposit / NFT Balance
-    balance: 25.4867, // Total USDT Balance
-    tonBalance: 4.82,
+    depositBalance: 0.00, // Deposit / NFT Balance
+    balance: 0.0000, // Total USDT Balance
+    tonBalance: 0.00,
     miningRate: 0.0200, // USDT per day base rate (Free starter 0.02/day)
-    totalEarned: 14.4630,
-    totalWithdrawn: 12.0000,
+    totalEarned: 0.0000,
+    totalWithdrawn: 0.0000,
     referralCode: "CRYPTO-9482",
-    invitedCount: 8,
-    referralEarnings: 6.85,
+    invitedCount: 0,
+    referralEarnings: 0.0000,
     vipTier: "Standard Tier",
     vipPowerMultiplier: 1.0,
     joinedDate: "2026-08-15",
@@ -310,48 +310,9 @@ const mockDatabase = {
     }
   ],
 
-  transactions: [
-    {
-      id: "tx-1",
-      type: "Mining Reward",
-      amount: "+0.4821 USDT",
-      date: "Today, 12:45 PM",
-      status: "Success",
-      positive: true
-    },
-    {
-      id: "tx-2",
-      type: "Referral Commission",
-      amount: "+1.2500 USDT",
-      date: "Today, 09:12 AM",
-      status: "Success",
-      positive: true
-    },
-    {
-      id: "tx-3",
-      type: "USDT Withdrawal",
-      amount: "-12.0000 USDT",
-      date: "Yesterday, 04:30 PM",
-      status: "Success",
-      positive: false
-    },
-    {
-      id: "tx-4",
-      type: "Deposit USDT (TRC20)",
-      amount: "+30.0000 USDT",
-      date: "3 days ago",
-      status: "Success",
-      positive: true
-    }
-  ],
+  transactions: [],
 
-  referrals: [
-    { name: "cryptoking_99", earned: "2.45 USDT", level: "Tier 1 (10%)", date: "2 days ago" },
-    { name: "ton_whale_77", earned: "1.80 USDT", level: "Tier 1 (10%)", date: "4 days ago" },
-    { name: "satoshifan", earned: "1.20 USDT", level: "Tier 1 (10%)", date: "5 days ago" },
-    { name: "miner_pro_dx", earned: "0.85 USDT", level: "Tier 2 (5%)", date: "6 days ago" },
-    { name: "crypto_girl22", earned: "0.55 USDT", level: "Tier 3 (2%)", date: "1 week ago" }
-  ]
+  referrals: []
 };
 
 module.exports = mockDatabase;
