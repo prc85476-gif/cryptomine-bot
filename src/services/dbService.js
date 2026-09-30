@@ -39,12 +39,17 @@ class DBService {
   }
 
   /**
-   * Get or create a user by Telegram ID
+   * Get or create a user by Telegram ID with Anti-Multi Account Protection
    */
-  async getUser(telegramId = 9482103, meta = {}) {
+  async getUser(telegramId = 9482103, meta = {}, clientInfo = {}) {
     try {
       const tgId = Number(telegramId) || 9482103;
       const res = await db.query('SELECT * FROM users WHERE telegram_id = $1', [tgId]);
+
+      const client = (clientInfo.ip || clientInfo.fingerprint) ? clientInfo : (meta.clientInfo || {});
+      const clientIp = (client.ip || '').trim();
+      const deviceFp = (client.fingerprint || '').trim();
+      const userAgent = (client.userAgent || '').trim();
 
       // Resolve effective referrer if provided via direct ID or startParam/code
       let effectiveReferrerId = meta.referrerId ? Number(meta.referrerId) : null;
@@ -56,50 +61,106 @@ class DBService {
       }
       
       if (res.rows.length > 0) {
+        const existing = res.rows[0];
+
+        // Track & update IP / device fingerprint for existing user
+        const updates = {};
+        if (clientIp && clientIp !== existing.last_ip) updates.last_ip = clientIp;
+        if (deviceFp && !existing.device_fingerprint) updates.device_fingerprint = deviceFp;
+        if (userAgent && !existing.user_agent) updates.user_agent = userAgent;
+
         // If user already exists in DB but doesn't have a referrer_id linked yet
-        if (!res.rows[0].referrer_id && effectiveReferrerId) {
-          await db.query('UPDATE users SET referrer_id = $1 WHERE telegram_id = $2', [effectiveReferrerId, tgId]);
-          res.rows[0].referrer_id = effectiveReferrerId;
-
-          await this.addReferral(effectiveReferrerId, {
-            referredId: tgId,
-            username: res.rows[0].username,
-            firstName: res.rows[0].first_name,
-            level: 1,
-            commissionEarned: 0.00
-          });
-
-          // Award +1 Mystery Gift Box to referrer
-          await db.query(`
-            UPDATE users 
-            SET gift_boxes_available = COALESCE(gift_boxes_available, 0) + 1 
-            WHERE telegram_id = $1;
-          `, [effectiveReferrerId]);
-
-          try {
-            const mainBotService = require('./mainBotService');
-            if (mainBotService?.notifyReferrerNewUser) {
-              mainBotService.notifyReferrerNewUser(effectiveReferrerId, res.rows[0].username, res.rows[0].first_name);
+        if (!existing.referrer_id && effectiveReferrerId && !existing.is_banned) {
+          // Check if self-referring from same device / IP
+          let isSelfRef = false;
+          if (deviceFp || clientIp) {
+            const refCheck = await db.query('SELECT telegram_id, last_ip, device_fingerprint FROM users WHERE telegram_id = $1', [effectiveReferrerId]);
+            if (refCheck.rows.length > 0) {
+              const rUser = refCheck.rows[0];
+              if ((deviceFp && rUser.device_fingerprint === deviceFp) || (clientIp && clientIp !== '127.0.0.1' && rUser.last_ip === clientIp)) {
+                isSelfRef = true;
+              }
             }
-          } catch (e) {}
+          }
+
+          if (!isSelfRef) {
+            await db.query('UPDATE users SET referrer_id = $1 WHERE telegram_id = $2', [effectiveReferrerId, tgId]);
+            existing.referrer_id = effectiveReferrerId;
+
+            await this.addReferral(effectiveReferrerId, {
+              referredId: tgId,
+              username: existing.username,
+              firstName: existing.first_name,
+              level: 1,
+              commissionEarned: 0.00
+            });
+
+            // Award +1 Mystery Gift Box to referrer
+            await db.query(`
+              UPDATE users 
+              SET gift_boxes_available = COALESCE(gift_boxes_available, 0) + 1 
+              WHERE telegram_id = $1;
+            `, [effectiveReferrerId]);
+
+            try {
+              const mainBotService = require('./mainBotService');
+              if (mainBotService?.notifyReferrerNewUser) {
+                mainBotService.notifyReferrerNewUser(effectiveReferrerId, existing.username, existing.first_name);
+              }
+            } catch (e) {}
+          }
         }
 
         // Optionally update profile details if new metadata provided
-        if (meta.username || meta.firstName || meta.lastName || meta.avatar) {
-          const updates = {};
-          if (meta.username && meta.username !== res.rows[0].username) updates.username = meta.username;
-          if (meta.firstName && meta.firstName !== res.rows[0].first_name) updates.first_name = meta.firstName;
-          if (meta.lastName && meta.lastName !== res.rows[0].last_name) updates.last_name = meta.lastName;
-          if (meta.avatar && meta.avatar !== res.rows[0].avatar) updates.avatar = meta.avatar;
+        if (meta.username && meta.username !== existing.username) updates.username = meta.username;
+        if (meta.firstName && meta.firstName !== existing.first_name) updates.first_name = meta.firstName;
+        if (meta.lastName && meta.lastName !== existing.last_name) updates.last_name = meta.lastName;
+        if (meta.avatar && meta.avatar !== existing.avatar) updates.avatar = meta.avatar;
 
-          if (Object.keys(updates).length > 0) {
-            return await this.updateUser(tgId, updates);
-          }
+        if (Object.keys(updates).length > 0) {
+          return await this.updateUser(tgId, updates);
         }
-        return this.formatUser(res.rows[0]);
+        return this.formatUser(existing);
       }
 
-      // Auto-create user if not exists in Neon Database
+      // --- MULTI-ACCOUNT ABUSE DETECTION FOR NEW USERS ---
+      let isBanned = false;
+      let banReason = null;
+      let matchedUser = null;
+
+      // 1. Device Fingerprint collision check (High accuracy)
+      if (deviceFp && deviceFp.length > 5) {
+        const dupFp = await db.query(
+          'SELECT telegram_id, username, first_name FROM users WHERE device_fingerprint = $1 AND telegram_id != $2 LIMIT 1',
+          [deviceFp, tgId]
+        );
+        if (dupFp.rows.length > 0) {
+          isBanned = true;
+          banReason = 'Multiple ID Abuse: Same Device Fingerprint detected';
+          matchedUser = dupFp.rows[0];
+          console.warn(`🚨 [Anti-Multi] Device FP match: UID ${tgId} matches existing UID ${matchedUser.telegram_id}`);
+        }
+      }
+
+      // 2. IP Collision & Self-Referral check (Excluding local loopbacks)
+      if (!isBanned && clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1' && !clientIp.startsWith('192.168.') && !clientIp.startsWith('10.')) {
+        if (effectiveReferrerId) {
+          const refRes = await db.query('SELECT telegram_id, username, last_ip, device_fingerprint FROM users WHERE telegram_id = $1', [effectiveReferrerId]);
+          if (refRes.rows.length > 0 && refRes.rows[0].last_ip === clientIp) {
+            isBanned = true;
+            banReason = 'Multiple ID Abuse: Self-referral from same IP';
+            matchedUser = refRes.rows[0];
+            console.warn(`🚨 [Anti-Multi] Self-referral IP match: UID ${tgId} created from referrer IP ${clientIp}`);
+          }
+        }
+      }
+
+      // If banned, cancel referral link and rewards
+      if (isBanned) {
+        effectiveReferrerId = null;
+      }
+
+      // Auto-create user in Neon Database
       const username = meta.username || `user_${tgId}`;
       const firstName = meta.firstName || 'Miner';
       const lastName = meta.lastName || `#${tgId}`;
@@ -111,14 +172,16 @@ class DBService {
           telegram_id, username, first_name, last_name,
           balance, deposit_balance, ton_balance, total_earned,
           total_withdrawn, total_deposited, mining_rate, referral_code,
-          referrer_id, vip_tier, vip_power_multiplier, wallet_address, avatar, is_banned,
+          referrer_id, vip_tier, vip_power_multiplier, wallet_address, avatar,
+          is_banned, ban_reason, device_fingerprint, last_ip, user_agent,
           gift_boxes_available, gift_boxes_opened, daily_speed_bonus
         ) VALUES (
           $1, $2, $3, $4,
           0.0000, 0.0000, 0.0000, 0.0000,
           0.0000, 0.0000, 0.0200, $5,
-          $6, 'Standard Tier', 1.00, null, $7, false,
-          1, 0, 0.0000
+          $6, 'Standard Tier', 1.00, null, $7,
+          $8, $9, $10, $11, $12,
+          $13, 0, 0.0000
         ) RETURNING *;
       `, [
         tgId,
@@ -127,8 +190,32 @@ class DBService {
         lastName,
         referralCode,
         effectiveReferrerId || null,
-        avatar
+        avatar,
+        isBanned,
+        banReason,
+        deviceFp || null,
+        clientIp || null,
+        userAgent || null,
+        isBanned ? 0 : 1
       ]);
+
+      // If multi-account was detected, notify Admin Bot in real time
+      if (isBanned) {
+        try {
+          const telegramBotService = require('./telegramBotService');
+          if (telegramBotService?.notifyMultiAccountAbuse) {
+            telegramBotService.notifyMultiAccountAbuse({
+              userId: tgId,
+              username: username,
+              matchedUserId: matchedUser?.telegram_id,
+              matchedUsername: matchedUser?.username,
+              deviceFp: deviceFp,
+              ip: clientIp,
+              reason: banReason
+            });
+          }
+        } catch (e) {}
+      }
 
       // Initialize default active miner for this user (Free Starter Mining: 0.02 USDT/day for 10 days = 0.20 USDT total)
       await db.query(`
@@ -154,8 +241,8 @@ class DBService {
         ) ON CONFLICT (user_id) DO NOTHING;
       `, [tgId]);
 
-      // If registered with referrer, record referral link, award +1 box, and notify referrer
-      if (effectiveReferrerId && effectiveReferrerId !== tgId) {
+      // If registered with clean referrer, record referral link, award +1 box, and notify referrer
+      if (effectiveReferrerId && effectiveReferrerId !== tgId && !isBanned) {
         await this.addReferral(effectiveReferrerId, {
           referredId: tgId,
           username,
@@ -212,6 +299,9 @@ class DBService {
       walletAddress: (row.wallet_address && !row.wallet_address.includes('...')) ? row.wallet_address : null,
       avatar: row.avatar || '/assets/images/nft/miner-robot.png',
       isBanned: row.is_banned === true,
+      banReason: row.ban_reason || null,
+      deviceFingerprint: row.device_fingerprint || null,
+      lastIp: row.last_ip || null,
       isMiningActive: true
     };
   }
@@ -294,6 +384,10 @@ class DBService {
         avatar: 'avatar',
         referralCode: 'referral_code',
         isBanned: 'is_banned',
+        banReason: 'ban_reason',
+        deviceFingerprint: 'device_fingerprint',
+        lastIp: 'last_ip',
+        userAgent: 'user_agent',
         giftBoxesAvailable: 'gift_boxes_available',
         giftBoxesOpened: 'gift_boxes_opened',
         dailySpeedBonus: 'daily_speed_bonus'

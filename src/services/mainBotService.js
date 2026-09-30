@@ -71,8 +71,13 @@ class MainBotService {
         if (isBanned) {
           await this.bot.api.sendMessage({
             chat_id: chatId,
-            text: '🚫 <b>Your account has been suspended by the administrator.</b>\nYou are restricted from accessing this bot and the Mini App.',
-            parse_mode: 'HTML'
+            text: `🚫 <b>MULTIPLE ID / ACCOUNT BANNED!</b>\n━━━━━━━━━━━━━━━━━━━━\n⚠️ <i>Multiple accounts from the same device / IP address are strictly prohibited.</i>\n\n🔒 Your account has been suspended for violating our single-account policy.\n\n📞 <b>Contact Support:</b> @CryptoMint_Support_bot`,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '📞 Contact Support', url: 'https://t.me/CryptoMint_Support_bot' }]
+              ]
+            }
           });
           return;
         }
@@ -95,7 +100,7 @@ class MainBotService {
         }
 
         // 3. Register or get user from Neon DB
-        await dbService.getUser(userId, {
+        const user = await dbService.getUser(userId, {
           username: from?.username || `user_${userId}`,
           firstName,
           lastName,
@@ -103,7 +108,22 @@ class MainBotService {
           startParam: parts.length > 1 ? parts[1].trim() : null
         }).catch((err) => {
           console.error('Error in main bot getUser:', err.message);
+          return null;
         });
+
+        if (user && user.isBanned) {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `🚫 <b>MULTIPLE ID / ACCOUNT BANNED!</b>\n━━━━━━━━━━━━━━━━━━━━\n⚠️ <i>Multiple accounts from the same device / IP address are strictly prohibited.</i>\n\n🔒 Your account has been suspended for violating our single-account policy.\n\n📞 <b>Contact Support:</b> @CryptoMint_Support_bot`,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '📞 Contact Support', url: 'https://t.me/CryptoMint_Support_bot' }]
+              ]
+            }
+          });
+          return;
+        }
 
         // 4. Prepare Mini App WebApp URL
         const appUrl = (process.env.MINI_APP_URL || 'https://cryptomine-app.com').trim();

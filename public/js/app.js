@@ -106,18 +106,22 @@ const App = {
     }
   },
 
-  showBannedScreen() {
+  showBannedScreen(customMsg) {
     document.body.innerHTML = `
-      <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #060914; color: #fff; padding: 24px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-        <div style="width: 80px; height: 80px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; display: flex; align-items: center; justify-content: center; font-size: 36px; margin-bottom: 20px;">
+      <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at top, #1e112a, #060914); color: #fff; padding: 24px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="width: 86px; height: 86px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; display: flex; align-items: center; justify-content: center; font-size: 40px; margin-bottom: 20px; box-shadow: 0 0 30px rgba(239, 68, 68, 0.3);">
           🚫
         </div>
-        <h2 style="font-size: 22px; font-weight: 700; color: #ef4444; margin-bottom: 10px;">Account Suspended</h2>
+        <h2 style="font-size: 22px; font-weight: 800; color: #ef4444; margin-bottom: 12px; letter-spacing: -0.5px;">MULTIPLE ID BANNED!</h2>
         <p style="font-size: 14px; color: #94a3b8; max-width: 320px; line-height: 1.6; margin-bottom: 24px;">
-          Your account has been restricted by the administrator. You are not allowed to access the Mini App or perform transactions.
+          ${customMsg || 'Multiple accounts from the same device or IP address are strictly prohibited. Your account has been suspended for violating our single-account policy.'}
         </p>
-        <div style="background: rgba(255,255,255,0.05); padding: 14px 20px; border-radius: 12px; font-size: 13px; color: #cbd5e1; border: 1px solid rgba(255,255,255,0.1);">
-          If you believe this is an error, please contact Telegram Support.
+        <a href="https://t.me/CryptoMint_Support_bot" target="_blank" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; max-width: 320px; padding: 14px 20px; background: linear-gradient(135deg, #0088cc, #00b4d8); color: #fff; font-weight: 700; font-size: 15px; border-radius: 14px; text-decoration: none; box-shadow: 0 4px 20px rgba(0, 136, 204, 0.4); margin-bottom: 14px;">
+          <span>📞</span>
+          <span>Contact Support (@CryptoMint_Support_bot)</span>
+        </a>
+        <div style="font-size: 12px; color: #64748b;">
+          Single Account Policy • Anti-Fraud Security System
         </div>
       </div>
     `;

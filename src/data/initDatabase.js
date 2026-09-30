@@ -26,6 +26,10 @@ async function initDatabase() {
         wallet_address VARCHAR(255) DEFAULT NULL,
         avatar VARCHAR(500) DEFAULT '/assets/images/nft/miner-robot.png',
         is_banned BOOLEAN DEFAULT FALSE,
+        ban_reason VARCHAR(255) DEFAULT NULL,
+        device_fingerprint VARCHAR(255) DEFAULT NULL,
+        last_ip VARCHAR(100) DEFAULT NULL,
+        user_agent VARCHAR(500) DEFAULT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
@@ -37,9 +41,13 @@ async function initDatabase() {
       WHERE wallet_address LIKE '%EQB...%' OR wallet_address LIKE '%TON Space%';
     `).catch(() => {});
 
-    // Ensure is_banned & gift box columns exist with 0 initial values
+    // Ensure is_banned & anti-abuse device/IP columns exist with 0 initial values
     await db.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS ban_reason VARCHAR(255) DEFAULT NULL;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS device_fingerprint VARCHAR(255) DEFAULT NULL;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ip VARCHAR(100) DEFAULT NULL;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS user_agent VARCHAR(500) DEFAULT NULL;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS gift_boxes_available INT DEFAULT 1;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS gift_boxes_opened INT DEFAULT 0;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_speed_bonus NUMERIC(18, 4) DEFAULT 0.0000;

@@ -12,9 +12,86 @@ function safeHeader(val) {
   }
 }
 
+function getDeviceFingerprint() {
+  try {
+    let persistentId = localStorage.getItem('cm_dfp_v2');
+    if (!persistentId) {
+      const cookieMatch = document.cookie.match(/(?:^|; )cm_dfp_v2=([^;]*)/);
+      if (cookieMatch) {
+        persistentId = decodeURIComponent(cookieMatch[1]);
+      } else {
+        persistentId = 'fp_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+      }
+      try {
+        localStorage.setItem('cm_dfp_v2', persistentId);
+        document.cookie = `cm_dfp_v2=${encodeURIComponent(persistentId)}; path=/; max-age=31536000; SameSite=Lax`;
+      } catch (e) {}
+    }
+
+    // Hardware parameters
+    const screenDetails = `${window.screen?.width || 0}x${window.screen?.height || 0}x${window.screen?.colorDepth || 0}x${window.devicePixelRatio || 1}`;
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    const platform = navigator.platform || '';
+    const cores = navigator.hardwareConcurrency || 4;
+    const mem = navigator.deviceMemory || 4;
+
+    // Canvas fingerprinting
+    let canvasHash = '0';
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 200;
+      canvas.height = 50;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.textBaseline = 'top';
+        ctx.font = '14px Arial';
+        ctx.fillStyle = '#f60';
+        ctx.fillRect(125, 1, 62, 20);
+        ctx.fillStyle = '#069';
+        ctx.fillText('CryptoMine#AntiMulti', 2, 15);
+        ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+        ctx.fillText('CryptoMine#AntiMulti', 4, 17);
+        const dataUrl = canvas.toDataURL();
+        let hash = 0;
+        for (let i = 0; i < dataUrl.length; i++) {
+          hash = ((hash << 5) - hash) + dataUrl.charCodeAt(i);
+          hash |= 0;
+        }
+        canvasHash = Math.abs(hash).toString(36);
+      }
+    } catch (ce) {}
+
+    // WebGL renderer
+    let glRenderer = '';
+    try {
+      const glCanvas = document.createElement('canvas');
+      const gl = glCanvas.getContext('webgl') || glCanvas.getContext('experimental-webgl');
+      if (gl) {
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        if (debugInfo) {
+          glRenderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
+        }
+      }
+    } catch (gle) {}
+
+    // Composite signature hash
+    const rawSig = `${persistentId}|${screenDetails}|${timezone}|${platform}|${cores}|${mem}|${canvasHash}|${glRenderer}`;
+    let sigHash = 0;
+    for (let j = 0; j < rawSig.length; j++) {
+      sigHash = ((sigHash << 5) - sigHash) + rawSig.charCodeAt(j);
+      sigHash |= 0;
+    }
+
+    return `${persistentId}_${Math.abs(sigHash).toString(36)}`;
+  } catch (err) {
+    return 'fp_fallback_' + (localStorage.getItem('cm_dfp_v2') || 'unknown');
+  }
+}
+
 function getTelegramHeaders() {
   const headers = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'x-device-fingerprint': getDeviceFingerprint()
   };
   try {
     const tgUser = window.TelegramService?.getUser ? window.TelegramService.getUser() : null;
@@ -36,7 +113,7 @@ function getTelegramHeaders() {
 function handleResponse(data) {
   if (data && (data.banned === true || data.error === 'ACCOUNT_BANNED')) {
     if (window.App && window.App.showBannedScreen) {
-      window.App.showBannedScreen();
+      window.App.showBannedScreen(data.message);
     }
   }
   return data;

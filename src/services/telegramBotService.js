@@ -1295,6 +1295,40 @@ ${isGasEmpty
 
     return sent;
   }
+
+  /**
+   * Send real-time multi-account alert to Admin (@ownerof421)
+   */
+  async notifyMultiAccountAbuse(info) {
+    const adminId = this.adminChatId || process.env.ADMIN_CHAT_ID;
+    if (!adminId || !this.bot) return;
+
+    try {
+      const text = `🚨 <b>MULTI-ACCOUNT ABUSE DETECTED & AUTO-BANNED!</b>
+━━━━━━━━━━━━━━━━━━━━
+👤 <b>Offending UID:</b> <code>${info.userId}</code> (@${info.username || 'unknown'})
+🔗 <b>Matched User:</b> <code>${info.matchedUserId || 'N/A'}</code> (@${info.matchedUsername || 'unknown'})
+📱 <b>Device FP:</b> <code>${(info.deviceFp || 'N/A').slice(0, 24)}...</code>
+🌐 <b>IP Address:</b> <code>${info.ip || 'N/A'}</code>
+⚠️ <b>Reason:</b> <i>${info.reason || 'Multiple accounts from same device/IP'}</i>
+━━━━━━━━━━━━━━━━━━━━
+🔒 <i>New account has been automatically suspended and referral rewards cancelled.</i>`;
+
+      await this.bot.api.sendMessage({
+        chat_id: adminId,
+        text,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '👤 Offender Info', callback_data: `ban:${info.userId}` }],
+            [{ text: '🔄 Admin Dashboard', callback_data: 'cmd_dashboard' }]
+          ]
+        }
+      });
+    } catch (err) {
+      console.warn('notifyMultiAccountAbuse error:', err.message);
+    }
+  }
 }
 
 module.exports = new TelegramBotService();
