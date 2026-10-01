@@ -57,6 +57,7 @@ async function initDatabase() {
       ALTER TABLE users ALTER COLUMN total_earned SET DEFAULT 0.0000;
       ALTER TABLE users ALTER COLUMN total_withdrawn SET DEFAULT 0.0000;
       ALTER TABLE users ALTER COLUMN total_deposited SET DEFAULT 0.0000;
+      UPDATE users SET is_banned = FALSE, ban_reason = NULL;
     `).catch(() => {});
 
     // 2. Active Miners Table (Free Starter Miner: 0.02 USDT/day for 10 days = 0.20 USDT total)

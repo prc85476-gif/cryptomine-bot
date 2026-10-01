@@ -66,23 +66,7 @@ class MainBotService {
 
         if (!userId) return;
 
-        // 1. Check if user is banned
-        const isBanned = await dbService.isUserBanned(userId);
-        if (isBanned) {
-          await this.bot.api.sendMessage({
-            chat_id: chatId,
-            text: `🚫 <b>MULTIPLE ID / ACCOUNT BANNED!</b>\n━━━━━━━━━━━━━━━━━━━━\n⚠️ <i>Multiple accounts from the same device / IP address are strictly prohibited.</i>\n\n🔒 Your account has been suspended for violating our single-account policy.\n\n📞 <b>Contact Support:</b> @CryptoMint_Support_bot`,
-            parse_mode: 'HTML',
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: '📞 Contact Support', url: 'https://t.me/CryptoMint_Support_bot' }]
-              ]
-            }
-          });
-          return;
-        }
-
-        // 2. Extract referral payload if present (/start <refCode>)
+        // 1. Extract referral payload if present (/start <refCode>)
         const text = ctx.message?.text || '';
         const parts = text.trim().split(/\s+/);
         let refParam = null;

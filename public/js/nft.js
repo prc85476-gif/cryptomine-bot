@@ -4,6 +4,87 @@
 const NFTModule = {
   currentRarity: 'all',
 
+  defaultNFTs: [
+    {
+      id: "nft-1024",
+      name: "Cyber Bot #1024",
+      description: "AI cyber miner with steady daily mining rewards.",
+      rarity: "Common",
+      price: 2.0,
+      currency: "USDT",
+      dailyReward: 0.2000,
+      totalReward: 6.0000,
+      duration: 30,
+      hashrate: "120 MH/s",
+      image: "/assets/images/nft/miner-robot.png"
+    },
+    {
+      id: "nft-2048",
+      name: "Frostfang Wolf #2048",
+      description: "Frost cyber miner with higher daily returns.",
+      rarity: "Common",
+      price: 5.0,
+      currency: "USDT",
+      dailyReward: 0.3000,
+      totalReward: 9.0000,
+      duration: 30,
+      hashrate: "280 MH/s",
+      image: "/assets/images/nft/miner-wolf.png"
+    },
+    {
+      id: "nft-4096",
+      name: "Cyber Panda #4096",
+      description: "Smart AI panda miner with steady daily income.",
+      rarity: "Rare",
+      price: 15.0,
+      currency: "USDT",
+      dailyReward: 0.7000,
+      totalReward: 21.0000,
+      duration: 30,
+      hashrate: "650 MH/s",
+      image: "/assets/images/nft/miner-panda.png"
+    },
+    {
+      id: "nft-6666",
+      name: "Neon Neko #6666",
+      description: "High-yield cyber cat miner with rapid returns.",
+      rarity: "Rare",
+      price: 35.0,
+      currency: "USDT",
+      dailyReward: 1.5000,
+      totalReward: 45.0000,
+      duration: 30,
+      hashrate: "1400 MH/s",
+      image: "/assets/images/nft/miner-cat.png"
+    },
+    {
+      id: "nft-5555",
+      name: "Solar Phoenix #5555",
+      description: "Ultra-tier solar phoenix miner with supreme daily rewards.",
+      rarity: "Epic",
+      price: 75.0,
+      currency: "USDT",
+      dailyReward: 3.5000,
+      totalReward: 105.0000,
+      duration: 30,
+      hashrate: "3200 MH/s",
+      image: "/assets/images/nft/miner-phoenix.png"
+    },
+    {
+      id: "nft-9999",
+      name: "Aurelius Lion #9999",
+      description: "Top-tier legendary mining beast for maximum crypto output.",
+      rarity: "Legendary",
+      price: 150.0,
+      currency: "USDT",
+      dailyReward: 7.5000,
+      totalReward: 225.0000,
+      duration: 30,
+      hashrate: "7500 MH/s",
+      image: "/assets/images/nft/miner-lion.png"
+    }
+  ],
+
   init() {
     this.bindFilterEvents();
     this.loadNFTs();
@@ -26,12 +107,28 @@ const NFTModule = {
     const container = document.getElementById('nft-marketplace-list');
     if (!container) return;
 
-    container.innerHTML = '<div class="skeleton" style="height: 180px; margin-bottom: 12px; border-radius: 20px;"></div><div class="skeleton" style="height: 180px; border-radius: 20px;"></div>';
+    // 1. Instant Cache-First / Default Render (0ms Delay)
+    const state = window.appState?.getState();
+    const sourceList = (state?.nfts && state.nfts.length > 0) ? state.nfts : this.defaultNFTs;
+    let filtered = sourceList;
+    if (rarity && rarity !== 'all') {
+      filtered = filtered.filter(n => (n.rarity || '').toLowerCase() === rarity.toLowerCase());
+    }
+    this.renderNFTList(filtered, container);
 
-    const res = await window.ApiService.getNFTs(rarity);
-    if (res.success && res.data) {
-      window.appState.setState({ nfts: res.data });
-      this.renderNFTList(res.data, container);
+    // 2. Background Sync with Neon Database
+    try {
+      const res = await window.ApiService.getNFTs(rarity);
+      if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+        window.appState.setState({ nfts: res.data });
+        let latest = res.data;
+        if (rarity && rarity !== 'all') {
+          latest = latest.filter(n => (n.rarity || '').toLowerCase() === rarity.toLowerCase());
+        }
+        this.renderNFTList(latest, container);
+      }
+    } catch (e) {
+      console.warn('NFT background sync notice:', e.message);
     }
   },
 

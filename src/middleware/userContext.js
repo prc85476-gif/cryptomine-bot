@@ -105,21 +105,6 @@ async function userContext(req, res, next) {
       clientInfo: req.clientInfo
     };
 
-    // Check if user is banned in Neon PostgreSQL
-    if (req.path !== '/health') {
-      const isBanned = await dbService.isUserBanned(req.userId);
-      if (isBanned) {
-        return res.status(403).json({
-          success: false,
-          banned: true,
-          error: "ACCOUNT_BANNED",
-          message: "🚫 MULTIPLE ID / ACCOUNT BANNED! Multiple accounts from the same device / IP are prohibited. Contact Support: @CryptoMint_Support_bot",
-          supportBot: "@CryptoMint_Support_bot",
-          supportUrl: "https://t.me/CryptoMint_Support_bot"
-        });
-      }
-    }
-
     next();
   } catch (err) {
     console.error('userContext middleware error:', err);

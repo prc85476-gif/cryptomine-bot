@@ -281,15 +281,14 @@ class DBService {
   }
 
   /**
-   * Check if User is Banned
+   * Check if User is Banned (Multi-accounts explicitly enabled for all users)
    */
   async isUserBanned(telegramId) {
     try {
       const tgId = Number(telegramId);
       const res = await db.query('SELECT is_banned FROM users WHERE telegram_id = $1', [tgId]);
-      return res.rows.length > 0 && res.rows[0].is_banned === true;
+      return false; // Multi-accounts enabled: never block users
     } catch (err) {
-      console.error('DBService.isUserBanned Error:', err);
       return false;
     }
   }
@@ -1020,17 +1019,19 @@ class DBService {
 
       // Calculate new mining rate by adding dailyAddAmount directly to mining rate
       const currentRate = parseFloat(user.miningRate || 0.0200);
-      const newMiningRate = parseFloat((currentRate + dailyAddAmount).toFixed(6));
+      const newMiningRate = parseFloat((currentRate + dailyAddAmount).toFixed(4));
       const newAvailable = Math.max(0, available - 1);
       const newOpened = openedSoFar + 1;
 
-      // Update user in Neon database
+      // Update user in Neon database (credit dailyAddAmount to balance and increase mining rate)
       const updateRes = await db.query(`
         UPDATE users
         SET gift_boxes_available = $1,
             gift_boxes_opened = $2,
             mining_rate = $3,
             daily_speed_bonus = COALESCE(daily_speed_bonus, 0) + $4,
+            balance = balance + $4,
+            total_earned = total_earned + $4,
             updated_at = NOW()
         WHERE telegram_id = $5
         RETURNING *;
@@ -1055,7 +1056,7 @@ class DBService {
         type: isStarterReward 
           ? `Welcome Starter Gift (+0.010$/day)` 
           : (isMilestoneReward ? `Milestone Gift Box #${newOpened} (+0.010$/day)` : `Mystery Gift Box (+${boostPercent}% Speed Boost)`),
-        amount: (isStarterReward || isMilestoneReward) ? `+0.010 USDT/day` : `+${boostPercent}% Boost`,
+        amount: (isStarterReward || isMilestoneReward) ? `+0.010 USDT` : `+${dailyAddAmount.toFixed(4)} USDT`,
         status: 'Completed',
         positive: true,
         date: 'Just now'
@@ -1087,6 +1088,7 @@ class DBService {
       throw err;
     }
   }
+
 
   /**
    * Get list of purchased NFT miner plan IDs for a user
