@@ -1275,6 +1275,108 @@ class DBService {
   }
 
   /**
+   * Admin-triggered instant activation of an NFT mining plan for a user
+   */
+  async activateNFTPlanForUser(userId, nftId, adminUsername = 'Admin') {
+    try {
+      const tgId = Number(userId);
+      const cleanId = String(nftId).toLowerCase().replace('nft-', '');
+      
+      const NFT_PLANS = {
+        '1024': { id: 'nft-1024', name: 'Cyber Bot #1024', rarity: 'Common', price: 2.0, dailyReward: 0.2000, totalReward: 6.0000, hashrate: '120 MH/s', image: '/assets/images/nft/miner-robot.png', duration: 30 },
+        '2048': { id: 'nft-2048', name: 'Frostfang Wolf #2048', rarity: 'Common', price: 5.0, dailyReward: 0.3000, totalReward: 9.0000, hashrate: '280 MH/s', image: '/assets/images/nft/miner-wolf.png', duration: 30 },
+        '4096': { id: 'nft-4096', name: 'Cyber Panda #4096', rarity: 'Rare', price: 15.0, dailyReward: 0.7000, totalReward: 21.0000, hashrate: '650 MH/s', image: '/assets/images/nft/miner-panda.png', duration: 30 },
+        '6666': { id: 'nft-6666', name: 'Neon Neko #6666', rarity: 'Rare', price: 35.0, dailyReward: 1.5000, totalReward: 45.0000, hashrate: '1400 MH/s', image: '/assets/images/nft/miner-cat.png', duration: 30 },
+        '5555': { id: 'nft-5555', name: 'Solar Phoenix #5555', rarity: 'Epic', price: 75.0, dailyReward: 3.5000, totalReward: 105.0000, hashrate: '3200 MH/s', image: '/assets/images/nft/miner-phoenix.png', duration: 30 },
+        '9999': { id: 'nft-9999', name: 'Aurelius Lion #9999', rarity: 'Legendary', price: 150.0, dailyReward: 7.5000, totalReward: 225.0000, hashrate: '7500 MH/s', image: '/assets/images/nft/miner-lion.png', duration: 30 }
+      };
+
+      const selectedPlan = NFT_PLANS[cleanId] || Object.values(NFT_PLANS).find(p => p.id === nftId);
+      if (!selectedPlan) {
+        throw new Error(`NFT Plan "${nftId}" not found. Available plans: 1024, 2048, 4096, 6666, 5555, 9999`);
+      }
+
+      const user = await this.getUser(tgId);
+      if (!user) throw new Error(`User UID ${tgId} not found in database.`);
+
+      const currentMiner = await this.getActiveMiner(tgId);
+      const existingDaily = parseFloat(currentMiner?.dailyReward || user.miningRate || 0.0200);
+      const newCombinedDailyRate = parseFloat((existingDaily + selectedPlan.dailyReward).toFixed(4));
+      const existingMax = parseFloat(currentMiner?.maxReward || 0.2000);
+      const newCombinedMaxReward = parseFloat((existingMax + selectedPlan.totalReward).toFixed(4));
+      const combinedPrice = parseFloat(((currentMiner?.purchasePrice || 0) + selectedPlan.price).toFixed(2));
+
+      // 1. Update user mining rate
+      await this.updateUser(tgId, {
+        miningRate: newCombinedDailyRate
+      });
+
+      // 2. Update active miner
+      const updatedMiner = await this.updateActiveMiner(tgId, {
+        miner_id: selectedPlan.id.replace('nft-', ''),
+        name: selectedPlan.name,
+        rarity: selectedPlan.rarity,
+        daily_reward: newCombinedDailyRate,
+        max_reward: newCombinedMaxReward,
+        purchase_price: combinedPrice,
+        power_hashrate: selectedPlan.hashrate,
+        image: selectedPlan.image,
+        cycle_start_time: Date.now(),
+        mining_days: selectedPlan.duration
+      });
+
+      // 3. Record in user_purchased_miners
+      await db.query(`
+        INSERT INTO user_purchased_miners (user_id, nft_id, name, price, daily_reward)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (user_id, nft_id) DO UPDATE SET name = EXCLUDED.name, daily_reward = EXCLUDED.daily_reward;
+      `, [tgId, selectedPlan.id, selectedPlan.name, selectedPlan.price, selectedPlan.dailyReward]);
+
+      // 4. Record audit transaction
+      const txId = `tx-nft-adm-${Date.now()}`;
+      await this.addTransaction({
+        id: txId,
+        userId: tgId,
+        type: `NFT Plan Activated: ${selectedPlan.name} (By @${adminUsername})`,
+        amount: `+${selectedPlan.dailyReward.toFixed(4)} USDT/day`,
+        network: 'Internal System',
+        status: 'Completed',
+        positive: true,
+        date: 'Just now'
+      });
+
+      return {
+        success: true,
+        plan: selectedPlan,
+        user: await this.getUser(tgId),
+        miner: updatedMiner,
+        newMiningRate: newCombinedDailyRate
+      };
+    } catch (err) {
+      console.error('DBService.activateNFTPlanForUser Error:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Get all registered non-banned user Telegram IDs for broadcast
+   */
+  async getAllBroadcastRecipients() {
+    try {
+      const res = await db.query(`
+        SELECT telegram_id, username, first_name 
+        FROM users 
+        WHERE is_banned = FALSE AND telegram_id > 0
+        ORDER BY id ASC;
+      `);
+      return res.rows;
+    } catch (err) {
+      console.error('DBService.getAllBroadcastRecipients Error:', err);
+      return [];
+    }
+  }
+
+  /**
    * Get comprehensive system statistics for the Admin Bot Dashboard
    */
   async getAdminSystemStats() {

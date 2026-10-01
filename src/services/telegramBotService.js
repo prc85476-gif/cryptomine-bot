@@ -585,6 +585,54 @@ class TelegramBotService {
     this.bot.command('adddeposit', handleAddDepositCommand);
     this.bot.command('adddep', handleAddDepositCommand);
 
+    // /activenft command: /activenft <UID> <plan_id>
+    const handleActiveNFTCommand = async (ctx) => {
+      try {
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!this.isAuthorizedAdmin(ctx.from)) return;
+        const text = ctx.message?.text || '';
+        const parts = text.trim().split(/\s+/);
+        const targetId = parts[1];
+        const nftId = parts[2];
+
+        if (!targetId) {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `⚠️ <b>Usage:</b> <code>/activenft &lt;UID&gt; &lt;plan_id&gt;</code>\n\n<b>Available Plan IDs:</b>\n• <code>1024</code> (Cyber Bot #1024 - 2$ | +0.20$/d)\n• <code>2048</code> (Frostfang Wolf #2048 - 5$ | +0.30$/d)\n• <code>4096</code> (Cyber Panda #4096 - 15$ | +0.70$/d)\n• <code>6666</code> (Neon Neko #6666 - 35$ | +1.50$/d)\n• <code>5555</code> (Solar Phoenix #5555 - 75$ | +3.50$/d)\n• <code>9999</code> (Aurelius Lion #9999 - 150$ | +7.50$/d)\n\nExample: <code>/activenft 9482103 1024</code>`,
+            parse_mode: 'HTML'
+          });
+          return;
+        }
+
+        if (!nftId) {
+          await this.sendNFTPlanSelectionMenu(chatId, targetId);
+          return;
+        }
+
+        await this.handleActivateNFTPlan(chatId, targetId, nftId, null, ctx.from);
+      } catch (err) {
+        console.error('Error handling /activenft:', err.message);
+      }
+    };
+
+    this.bot.command('activenft', handleActiveNFTCommand);
+    this.bot.command('activatenft', handleActiveNFTCommand);
+    this.bot.command('nftplan', handleActiveNFTCommand);
+
+    // /broadcast command
+    const handleBroadcastCommand = async (ctx) => {
+      try {
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!this.isAuthorizedAdmin(ctx.from)) return;
+        await this.startBroadcastWizard(chatId);
+      } catch (err) {
+        console.error('Error handling /broadcast:', err.message);
+      }
+    };
+
+    this.bot.command('broadcast', handleBroadcastCommand);
+    this.bot.command('sendall', handleBroadcastCommand);
+
     // /deductbalance command: /deductbalance <UID> <amount>
     const handleDeductBalanceCommand = async (ctx) => {
       try {
@@ -915,6 +963,12 @@ class TelegramBotService {
             await this.sendUserProfileCard(chatId, targetId);
             return;
           }
+
+          if (session.state === 'AWAITING_BROADCAST_MESSAGE') {
+            const { cleanText, inlineKeyboard } = this.parseBroadcastContent(text);
+            await this.showBroadcastPreview(chatId, cleanText, null, inlineKeyboard);
+            return;
+          }
         }
 
         // If no active session and text is not a command starting with /, check if it's a numeric UID or @username
@@ -933,6 +987,27 @@ class TelegramBotService {
         }
       } catch (err) {
         console.error('Error handling message:text:', err.message);
+      }
+    });
+
+    // Message handler for photo broadcasts
+    this.bot.on('message:photo', async (ctx) => {
+      try {
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!chatId || !this.isAuthorizedAdmin(ctx.from)) return;
+
+        const session = this.adminSessions.get(chatId);
+        if (session && session.state === 'AWAITING_BROADCAST_MESSAGE') {
+          const photos = ctx.message?.photo || [];
+          const photoId = photos.length > 0 ? photos[photos.length - 1].file_id : null;
+          const caption = ctx.message?.caption || '';
+
+          const { cleanText, inlineKeyboard } = this.parseBroadcastContent(caption);
+          await this.showBroadcastPreview(chatId, cleanText, photoId, inlineKeyboard);
+          return;
+        }
+      } catch (err) {
+        console.error('Error handling message:photo for broadcast:', err.message);
       }
     });
 
@@ -982,6 +1057,32 @@ class TelegramBotService {
           return;
         }
 
+        if (data === 'cmd_broadcast') {
+          this.adminSessions.delete(chatId);
+          await this.startBroadcastWizard(chatId);
+          return;
+        }
+
+        if (data === 'broadcast_execute') {
+          await this.executeHighSpeedBroadcast(chatId);
+          return;
+        }
+
+        if (data === 'cmd_cancel_session' || data === 'broadcast_cancel') {
+          this.adminSessions.delete(chatId);
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: '❌ <b>Operation cancelled.</b>',
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🏠 Admin Dashboard', callback_data: 'cmd_dashboard' }]
+              ]
+            }
+          });
+          return;
+        }
+
         if (data === 'cmd_search_user') {
           this.adminSessions.set(chatId, { state: 'AWAITING_SEARCH_QUERY' });
           await this.bot.api.sendMessage({
@@ -994,6 +1095,18 @@ class TelegramBotService {
               ]
             }
           });
+          return;
+        }
+
+        if (data.startsWith('user_nft_menu:')) {
+          const targetId = data.split(':')[1];
+          await this.sendNFTPlanSelectionMenu(chatId, targetId, messageId);
+          return;
+        }
+
+        if (data.startsWith('user_actnft:')) {
+          const [, targetId, nftId] = data.split(':');
+          await this.handleActivateNFTPlan(chatId, targetId, nftId, messageId, from);
           return;
         }
 
@@ -1605,19 +1718,22 @@ class TelegramBotService {
             { text: '🛍️ Add Deposit Bal', callback_data: `user_adddep_menu:${user.telegramId}` }
           ],
           [
-            { text: '➖ Deduct Balance', callback_data: `user_deduct_menu:${user.telegramId}` },
+            { text: '⚡ Activate NFT Plan', callback_data: `user_nft_menu:${user.telegramId}` },
             { text: '⏱️ Set Withdraw Limit', callback_data: `user_limit_menu:${user.telegramId}` }
           ],
           [
-            { text: '📋 View Transactions', callback_data: `user_txs:${user.telegramId}` },
-            { text: '👥 View Referrals', callback_data: `user_refs:${user.telegramId}` }
+            { text: '➖ Deduct Balance', callback_data: `user_deduct_menu:${user.telegramId}` },
+            { text: '📋 View Transactions', callback_data: `user_txs:${user.telegramId}` }
           ],
           [
-            { text: isBanned ? '✅ Unban Account' : '🚫 Ban Account', callback_data: isBanned ? `unban:${user.telegramId}` : `ban:${user.telegramId}` },
-            { text: '🔄 Refresh Profile', callback_data: `user_refresh:${user.telegramId}` }
+            { text: '👥 View Referrals', callback_data: `user_refs:${user.telegramId}` },
+            { text: isBanned ? '✅ Unban Account' : '🚫 Ban Account', callback_data: isBanned ? `unban:${user.telegramId}` : `ban:${user.telegramId}` }
           ],
           [
-            { text: '🔍 Search Another', callback_data: 'cmd_search_user' },
+            { text: '🔄 Refresh Profile', callback_data: `user_refresh:${user.telegramId}` },
+            { text: '🔍 Search Another', callback_data: 'cmd_search_user' }
+          ],
+          [
             { text: '🏠 Admin Dashboard', callback_data: 'cmd_dashboard' }
           ]
         ]
@@ -2069,10 +2185,13 @@ ${currentBalText}
           ],
           [
             { text: `📋 Pending Requests (${stats.pendingWithdrawalsCount})`, callback_data: 'cmd_pending' },
-            { text: '💼 Check Wallet', callback_data: 'cmd_balance' }
+            { text: '📢 Broadcast Message', callback_data: 'cmd_broadcast' }
           ],
           [
-            { text: '📢 Test Proof Post', callback_data: 'cmd_testchannel' },
+            { text: '💼 Check Hot Wallet', callback_data: 'cmd_balance' },
+            { text: '📢 Test Proof Post', callback_data: 'cmd_testchannel' }
+          ],
+          [
             { text: '🔍 View Hot Wallet on BscScan', url: walletInfo.bscScanUrl || 'https://bscscan.com' }
           ]
         ]
@@ -2636,6 +2755,462 @@ ${isGasEmpty
     } catch (err) {
       console.warn('notifyMultiAccountAbuse error:', err.message);
     }
+  }
+
+  /**
+   * Render NFT Miner Plan Selection Menu for a User
+   */
+  async sendNFTPlanSelectionMenu(chatId, userId, messageId = null) {
+    if (!this.bot) return;
+
+    try {
+      const user = await dbService.getUser(userId);
+      const miner = await dbService.getActiveMiner(userId);
+      if (!user) {
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          text: `❌ User UID <code>${userId}</code> not found.`,
+          parse_mode: 'HTML'
+        });
+        return;
+      }
+
+      const cleanUsername = (user.username || '').replace(/^@/, '');
+      const userDisplay = cleanUsername ? `@${this.escapeHtml(cleanUsername)}` : 'Miner';
+
+      const menuText = `⚡ <b>ACTIVATE NFT MINER PLAN</b>
+━━━━━━━━━━━━━━━━━━━━
+👤 <b>Target User:</b> ${userDisplay} (UID: <code>${userId}</code>)
+🤖 <b>Current Miner:</b> ${this.escapeHtml(miner?.name || 'Starter')} (<code>${user.miningRate.toFixed(4)} USDT/day</code>)
+
+💎 <i>Select an NFT miner plan below to activate for this user instantly:</i>`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: '🤖 Cyber Bot #1024 (2$ | +0.20$/d)', callback_data: `user_actnft:${userId}:1024` }
+          ],
+          [
+            { text: '🐺 Frostfang Wolf #2048 (5$ | +0.30$/d)', callback_data: `user_actnft:${userId}:2048` }
+          ],
+          [
+            { text: '🐼 Cyber Panda #4096 (15$ | +0.70$/d)', callback_data: `user_actnft:${userId}:4096` }
+          ],
+          [
+            { text: '🐱 Neon Neko #6666 (35$ | +1.50$/d)', callback_data: `user_actnft:${userId}:6666` }
+          ],
+          [
+            { text: '🦅 Solar Phoenix #5555 (75$ | +3.50$/d)', callback_data: `user_actnft:${userId}:5555` }
+          ],
+          [
+            { text: '🦁 Aurelius Lion #9999 (150$ | +7.50$/d)', callback_data: `user_actnft:${userId}:9999` }
+          ],
+          [
+            { text: '🔙 Back to User Profile', callback_data: `user_view:${userId}` }
+          ]
+        ]
+      };
+
+      if (messageId) {
+        await this.bot.api.editMessageText({
+          chat_id: chatId,
+          message_id: messageId,
+          text: menuText,
+          parse_mode: 'HTML',
+          reply_markup: keyboard
+        }).catch(async () => {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: menuText,
+            parse_mode: 'HTML',
+            reply_markup: keyboard
+          });
+        });
+      } else {
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          text: menuText,
+          parse_mode: 'HTML',
+          reply_markup: keyboard
+        });
+      }
+    } catch (err) {
+      console.error('sendNFTPlanSelectionMenu error:', err);
+    }
+  }
+
+  /**
+   * Execute NFT Plan Activation and notify Admin & User
+   */
+  async handleActivateNFTPlan(chatId, userId, nftId, messageId = null, from = null) {
+    if (!this.bot) return;
+
+    try {
+      const adminUsername = from?.username || 'ownerof421';
+      const result = await dbService.activateNFTPlanForUser(userId, nftId, adminUsername);
+      const { plan, user, newMiningRate } = result;
+
+      const successMsg = `✅ <b>NFT MINER PLAN ACTIVATED!</b>
+━━━━━━━━━━━━━━━━━━━━
+👤 <b>User:</b> @${this.escapeHtml(user.username || 'user')} (UID: <code>${userId}</code>)
+📦 <b>Activated Plan:</b> <b>${plan.name}</b>
+⚡ <b>Plan Added Rate:</b> <code>+${plan.dailyReward.toFixed(4)} USDT/day</code>
+📈 <b>New Total Mining Rate:</b> <code>${newMiningRate.toFixed(4)} USDT/day</code>
+💎 <b>Total Plan Output:</b> <code>${plan.totalReward.toFixed(4)} USDT</code> (30 Days)
+⚡ <b>Hashrate Power:</b> <code>${plan.hashrate}</code>
+━━━━━━━━━━━━━━━━━━━━
+🟢 <i>The user's miner is now active and generating rewards in real-time!</i>`;
+
+      await this.bot.api.sendMessage({
+        chat_id: chatId,
+        text: successMsg,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '👤 View Updated Profile', callback_data: `user_view:${userId}` }],
+            [{ text: '⚡ Activate Another Plan', callback_data: `user_nft_menu:${userId}` }],
+            [{ text: '🏠 Admin Dashboard', callback_data: 'cmd_dashboard' }]
+          ]
+        }
+      });
+
+      // Send Instant Notification to User via Main Bot
+      try {
+        const mainBot = require('./mainBotService');
+        if (mainBot) {
+          const userMsg = `🎉 <b>CONGRATULATIONS! NFT MINER ACTIVATED!</b> 🤖
+━━━━━━━━━━━━━━━━━━━━
+An exclusive NFT Miner has been activated on your account by Admin!
+
+📦 <b>Miner Model:</b> <b>${plan.name}</b>
+⚡ <b>Mining Hashrate:</b> <code>${plan.hashrate}</code>
+💰 <b>Daily Mining Output:</b> <code>+${plan.dailyReward.toFixed(4)} USDT/day</code>
+📈 <b>Your New Mining Speed:</b> <code>${newMiningRate.toFixed(4)} USDT/day</code>
+⏳ <b>Duration:</b> 30 Days (Active)
+━━━━━━━━━━━━━━━━━━━━
+🚀 <i>Open the Mini App now to watch your live crypto mining earnings!</i>`;
+
+          await mainBot.sendMessageToUser(user.telegramId, {
+            text: userMsg,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '💎 Open Mini App', url: 'https://t.me/cryptomintnftbot/app' }]
+              ]
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Could not notify user on telegram:', e.message);
+      }
+    } catch (err) {
+      await this.bot.api.sendMessage({
+        chat_id: chatId,
+        text: `❌ <b>Activation Failed:</b> <code>${this.escapeHtml(err.message)}</code>`,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔙 Back to User Profile', callback_data: `user_view:${userId}` }]
+          ]
+        }
+      });
+    }
+  }
+
+  /**
+   * Start interactive broadcast prompt with complete guide and examples
+   */
+  async startBroadcastWizard(chatId) {
+    if (!this.bot) return;
+
+    this.adminSessions.set(chatId, { state: 'AWAITING_BROADCAST_MESSAGE' });
+
+    const promptText = `📢 <b>HIGH-SPEED BROADCAST SYSTEM</b>
+━━━━━━━━━━━━━━━━━━━━
+Send any text message or photo with caption to broadcast to all registered bot users at maximum speed.
+
+💡 <b>HOW TO ADD INLINE BUTTONS:</b>
+Add buttons at the bottom of your message with this syntax:
+<code>Button Text - https://yourlink.com</code>
+
+<b>Multiple buttons on separate lines:</b>
+<code>💎 Open Mini App - https://t.me/cryptomintnftbot/app</code>
+<code>📢 Join Proof Channel - https://t.me/cryptomintwithdraw</code>
+
+<b>Side-by-side buttons on the same row (separated by ||):</b>
+<code>🎁 Mini App - https://t.me/cryptomintnftbot/app || 📢 Channel - https://t.me/cryptomintwithdraw</code>
+
+🖼️ <b>PHOTO BROADCAST:</b>
+Simply send a photo with your text and buttons inside the caption!
+
+⚡ <b>HTML FORMATTING SUPPORTED:</b>
+&lt;b&gt;bold&lt;/b&gt;, &lt;i&gt;italic&lt;/i&gt;, &lt;code&gt;code&lt;/code&gt;, &lt;a href="url"&gt;link&lt;/a&gt;
+
+━━━━━━━━━━━━━━━━━━━━
+<i>Type your message or send a photo now (or click cancel below):</i>`;
+
+    await this.bot.api.sendMessage({
+      chat_id: chatId,
+      text: promptText,
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '❌ Cancel Broadcast', callback_data: 'cmd_cancel_session' }]
+        ]
+      }
+    });
+  }
+
+  /**
+   * Parse message text for clean content and inline buttons
+   */
+  parseBroadcastContent(rawText) {
+    if (!rawText) return { cleanText: '', inlineKeyboard: [] };
+
+    const lines = rawText.split('\n');
+    const contentLines = [];
+    const buttonRows = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) {
+        contentLines.push('');
+        continue;
+      }
+
+      // Check if line contains one or more button definitions
+      const parts = line.split(/\s*\|\|\s*/);
+      let isButtonLine = false;
+      const rowButtons = [];
+
+      for (const part of parts) {
+        const hyphenMatch = part.match(/^(.+?)\s*[-|–—]\s*(https?:\/\/[^\s]+)$/i);
+        const mdMatch = part.match(/^\[(.+?)\]\((https?:\/\/[^\s]+)\)$/i);
+
+        if (hyphenMatch) {
+          isButtonLine = true;
+          rowButtons.push({ text: hyphenMatch[1].trim(), url: hyphenMatch[2].trim() });
+        } else if (mdMatch) {
+          isButtonLine = true;
+          rowButtons.push({ text: mdMatch[1].trim(), url: mdMatch[2].trim() });
+        }
+      }
+
+      if (isButtonLine && rowButtons.length > 0) {
+        buttonRows.push(rowButtons);
+      } else {
+        contentLines.push(lines[i]);
+      }
+    }
+
+    // Trim trailing empty lines
+    let cleanText = contentLines.join('\n').trim();
+    return {
+      cleanText,
+      inlineKeyboard: buttonRows
+    };
+  }
+
+  /**
+   * Show live broadcast preview to admin for confirmation
+   */
+  async showBroadcastPreview(chatId, cleanText, photoId, inlineKeyboard) {
+    if (!this.bot) return;
+
+    try {
+      const recipients = await dbService.getAllBroadcastRecipients();
+      const totalUsers = recipients.length;
+
+      this.adminSessions.set(chatId, {
+        state: 'AWAITING_BROADCAST_CONFIRM',
+        cleanText,
+        photoId,
+        inlineKeyboard,
+        recipients,
+        totalUsers
+      });
+
+      const confirmButtons = [
+        ...inlineKeyboard,
+        [
+          { text: `🚀 Confirm & Send to All (${totalUsers} Users)`, callback_data: 'broadcast_execute' }
+        ],
+        [
+          { text: '❌ Cancel Broadcast', callback_data: 'cmd_cancel_session' }
+        ]
+      ];
+
+      if (photoId) {
+        await this.bot.api.sendPhoto({
+          chat_id: chatId,
+          photo: photoId,
+          caption: cleanText,
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: confirmButtons }
+        });
+      } else {
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          text: cleanText,
+          parse_mode: 'HTML',
+          disable_web_page_preview: false,
+          reply_markup: { inline_keyboard: confirmButtons }
+        });
+      }
+
+      await this.bot.api.sendMessage({
+        chat_id: chatId,
+        text: `🔍 <b>BROADCAST LIVE PREVIEW:</b>\n━━━━━━━━━━━━━━━━━━━━\n👥 <b>Recipients:</b> <code>${totalUsers}</code> active users\n🖼️ <b>Media:</b> ${photoId ? 'Photo Attached 📸' : 'Text-only 📝'}\n🔘 <b>Buttons Attached:</b> <code>${inlineKeyboard.flat().length}</code> button(s)\n\n<i>Review the live preview above. Click <b>Confirm & Send</b> to broadcast immediately at high speed!</i>`,
+        parse_mode: 'HTML'
+      });
+    } catch (err) {
+      console.error('showBroadcastPreview error:', err);
+      await this.bot.api.sendMessage({
+        chat_id: chatId,
+        text: `❌ <b>Preview Error:</b> ${this.escapeHtml(err.message)}`,
+        parse_mode: 'HTML'
+      });
+    }
+  }
+
+  /**
+   * Execute high-speed chunked broadcast to all registered users
+   */
+  async executeHighSpeedBroadcast(adminChatId) {
+    if (!this.bot) return;
+
+    const session = this.adminSessions.get(adminChatId);
+    if (!session || !session.recipients) {
+      await this.bot.api.sendMessage({
+        chat_id: adminChatId,
+        text: '❌ <b>No pending broadcast found or session expired.</b>',
+        parse_mode: 'HTML'
+      });
+      return;
+    }
+
+    this.adminSessions.delete(adminChatId);
+
+    const { cleanText, photoId, inlineKeyboard, recipients } = session;
+    const totalUsers = recipients.length;
+
+    if (totalUsers === 0) {
+      await this.bot.api.sendMessage({
+        chat_id: adminChatId,
+        text: '⚠️ <b>No active users found to broadcast.</b>',
+        parse_mode: 'HTML'
+      });
+      return;
+    }
+
+    const progressMsg = await this.bot.api.sendMessage({
+      chat_id: adminChatId,
+      text: `🚀 <b>HIGH-SPEED BROADCAST STARTED!</b>\n━━━━━━━━━━━━━━━━━━━━\n👥 <b>Target Users:</b> <code>${totalUsers}</code>\n⏳ <b>Progress:</b> 0 / ${totalUsers} (0%)\n⚡ Processing at maximum speed...`,
+      parse_mode: 'HTML'
+    });
+
+    const progressMsgId = progressMsg?.message_id;
+    const startTime = Date.now();
+    let sentCount = 0;
+    let failCount = 0;
+    let lastProgressUpdate = Date.now();
+
+    const mainBot = require('./mainBotService');
+    const BATCH_SIZE = 25;
+    const DELAY_MS = 50;
+
+    for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+      const batch = recipients.slice(i, i + BATCH_SIZE);
+
+      await Promise.allSettled(batch.map(async (user) => {
+        const tgId = Number(user.telegram_id);
+        if (!tgId) return;
+
+        try {
+          if (mainBot?.bot) {
+            if (photoId) {
+              await mainBot.bot.api.sendPhoto({
+                chat_id: tgId,
+                photo: photoId,
+                caption: cleanText,
+                parse_mode: 'HTML',
+                reply_markup: inlineKeyboard.length > 0 ? { inline_keyboard: inlineKeyboard } : undefined
+              });
+            } else {
+              await mainBot.bot.api.sendMessage({
+                chat_id: tgId,
+                text: cleanText,
+                parse_mode: 'HTML',
+                disable_web_page_preview: false,
+                reply_markup: inlineKeyboard.length > 0 ? { inline_keyboard: inlineKeyboard } : undefined
+              });
+            }
+            sentCount++;
+          } else if (this.bot) {
+            if (photoId) {
+              await this.bot.api.sendPhoto({
+                chat_id: tgId,
+                photo: photoId,
+                caption: cleanText,
+                parse_mode: 'HTML',
+                reply_markup: inlineKeyboard.length > 0 ? { inline_keyboard: inlineKeyboard } : undefined
+              });
+            } else {
+              await this.bot.api.sendMessage({
+                chat_id: tgId,
+                text: cleanText,
+                parse_mode: 'HTML',
+                disable_web_page_preview: false,
+                reply_markup: inlineKeyboard.length > 0 ? { inline_keyboard: inlineKeyboard } : undefined
+              });
+            }
+            sentCount++;
+          }
+        } catch (err) {
+          failCount++;
+        }
+      }));
+
+      // Update progress every ~3 seconds or at the very end
+      const now = Date.now();
+      if ((now - lastProgressUpdate > 3000 || i + BATCH_SIZE >= recipients.length) && progressMsgId) {
+        lastProgressUpdate = now;
+        const currentProcessed = Math.min(i + BATCH_SIZE, totalUsers);
+        const percent = Math.round((currentProcessed / totalUsers) * 100);
+        await this.bot.api.editMessageText({
+          chat_id: adminChatId,
+          message_id: progressMsgId,
+          text: `🚀 <b>HIGH-SPEED BROADCASTING...</b>\n━━━━━━━━━━━━━━━━━━━━\n👥 <b>Target:</b> <code>${totalUsers}</code> users\n⏳ <b>Processed:</b> <code>${currentProcessed} / ${totalUsers}</code> (<b>${percent}%</b>)\n🟢 <b>Delivered:</b> <code>${sentCount}</code>\n🔴 <b>Failed/Blocked:</b> <code>${failCount}</code>`,
+          parse_mode: 'HTML'
+        }).catch(() => {});
+      }
+
+      await new Promise(r => setTimeout(r, DELAY_MS));
+    }
+
+    const durationSec = Math.max(1, Math.round((Date.now() - startTime) / 1000));
+    const avgSpeed = Math.round(sentCount / durationSec);
+
+    const summaryMsg = `✅ <b>BROADCAST COMPLETED SUCCESSFULLY!</b>
+━━━━━━━━━━━━━━━━━━━━
+👥 <b>Total Target Users:</b> <code>${totalUsers}</code>
+🟢 <b>Successfully Delivered:</b> <code>${sentCount}</code>
+🔴 <b>Failed / Blocked by User:</b> <code>${failCount}</code>
+⏱️ <b>Duration:</b> <code>${durationSec} seconds</code> (avg <b>${avgSpeed} msgs/sec</b>)
+━━━━━━━━━━━━━━━━━━━━
+🎉 <i>All active subscribers have received your announcement!</i>`;
+
+    await this.bot.api.sendMessage({
+      chat_id: adminChatId,
+      text: summaryMsg,
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '📢 New Broadcast', callback_data: 'cmd_broadcast' }],
+          [{ text: '🏠 Admin Dashboard', callback_data: 'cmd_dashboard' }]
+        ]
+      }
+    });
   }
 }
 
