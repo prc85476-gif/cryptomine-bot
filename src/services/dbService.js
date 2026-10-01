@@ -625,6 +625,65 @@ class DBService {
   }
 
   /**
+   * Get single transaction by ID from Neon Database
+   */
+  async getTransaction(txId) {
+    try {
+      if (!txId) return null;
+      const res = await db.query(`SELECT * FROM transactions WHERE id = $1 LIMIT 1;`, [txId]);
+      if (res.rows.length === 0) return null;
+      const r = res.rows[0];
+      return {
+        id: r.id,
+        userId: r.user_id,
+        type: r.type,
+        amount: r.amount,
+        txHash: r.tx_hash,
+        recipientAddress: r.recipient_address,
+        network: r.network,
+        status: r.status,
+        positive: r.positive,
+        date: r.date_str,
+        createdAt: r.created_at
+      };
+    } catch (err) {
+      console.error('DBService.getTransaction Error:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Get all pending withdrawal transactions from Neon Database
+   */
+  async getPendingWithdrawals(limit = 50) {
+    try {
+      const res = await db.query(`
+        SELECT * FROM transactions
+        WHERE status = 'Pending' AND type ILIKE '%Withdraw%'
+        ORDER BY created_at DESC
+        LIMIT $1;
+      `, [limit]);
+
+      return res.rows.map(r => ({
+        id: r.id,
+        userId: r.user_id,
+        type: r.type,
+        amount: r.amount,
+        txHash: r.tx_hash,
+        recipientAddress: r.recipient_address,
+        network: r.network,
+        status: r.status,
+        positive: r.positive,
+        date: r.date_str,
+        createdAt: r.created_at
+      }));
+    } catch (err) {
+      console.error('DBService.getPendingWithdrawals Error:', err);
+      return [];
+    }
+  }
+
+  /**
    * Get Transactions list for user from Neon Database
    */
   async getTransactions(userId = 9482103, limit = 50) {

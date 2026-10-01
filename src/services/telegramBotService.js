@@ -37,6 +37,9 @@ class TelegramBotService {
       this.isInitialized = true;
       console.log('🤖 Telegram Admin Bot initialized & connected with Neon DB (@acryptomintadminwithdraw2bot)...');
 
+      // Preload pending withdrawals from DB
+      this.loadPendingWithdrawalsFromDB().catch(() => {});
+
       // Start periodic background wallet health & gas fee monitor (every 10 mins)
       if (this.monitorInterval) clearInterval(this.monitorInterval);
       this.monitorInterval = setInterval(() => {
@@ -45,6 +48,41 @@ class TelegramBotService {
 
     } catch (err) {
       console.error('❌ Failed to initialize Telegram Bot:', err.message);
+    }
+  }
+
+  /**
+   * Preload any pending withdrawal requests from Neon PostgreSQL into memory
+   */
+  async loadPendingWithdrawalsFromDB() {
+    try {
+      const pendingTxs = await dbService.getPendingWithdrawals(100);
+      for (const tx of pendingTxs) {
+        const user = await dbService.getUser(tx.userId).catch(() => null);
+        const numAmount = Math.abs(parseFloat(String(tx.amount).replace(/[^0-9.]/g, '')) || 0);
+        const isBep20 = (tx.network || '').toUpperCase().includes('BEP20') || (tx.type || '').toUpperCase().includes('BEP20');
+        const fee = isBep20 ? 0.0050 : 1.0;
+        const finalReceived = parseFloat(Math.max(0, numAmount - fee).toFixed(4));
+
+        this.pendingWithdrawals.set(tx.id, {
+          txId: tx.id,
+          userId: tx.userId,
+          username: user?.username || 'Anonymous',
+          name: user?.name || user?.firstName || 'Miner',
+          amount: numAmount,
+          fee: fee,
+          finalReceived: finalReceived,
+          address: tx.recipientAddress,
+          network: tx.network || 'USDT BEP-20',
+          status: tx.status || 'Pending',
+          createdAt: tx.createdAt || new Date()
+        });
+      }
+      if (pendingTxs.length > 0) {
+        console.log(`📥 [Admin Bot] Preloaded ${pendingTxs.length} pending withdrawals from database into memory.`);
+      }
+    } catch (err) {
+      console.warn('⚠️ [Admin Bot] Could not preload pending withdrawals from DB:', err.message);
     }
   }
 
@@ -1188,7 +1226,35 @@ class TelegramBotService {
 
         // --- WITHDRAWAL APPROVAL & REJECTION ACTIONS ---
         const txId = targetId;
-        const withdrawal = this.pendingWithdrawals.get(txId);
+        let withdrawal = this.pendingWithdrawals.get(txId);
+
+        // Persistent Fallback: If not in memory (e.g. after redeploy/restart), load directly from PostgreSQL!
+        if (!withdrawal) {
+          const dbTx = await dbService.getTransaction(txId);
+          if (dbTx) {
+            const user = await dbService.getUser(dbTx.userId).catch(() => null);
+            const numAmount = Math.abs(parseFloat(String(dbTx.amount).replace(/[^0-9.]/g, '')) || 0);
+            const isBep20 = (dbTx.network || '').toUpperCase().includes('BEP20') || (dbTx.type || '').toUpperCase().includes('BEP20');
+            const fee = isBep20 ? 0.0050 : 1.0;
+            const finalReceived = parseFloat(Math.max(0, numAmount - fee).toFixed(4));
+
+            withdrawal = {
+              txId: dbTx.id,
+              userId: dbTx.userId,
+              username: user?.username || 'Anonymous',
+              name: user?.name || user?.firstName || 'Miner',
+              amount: numAmount,
+              fee: fee,
+              finalReceived: finalReceived,
+              address: dbTx.recipientAddress,
+              network: dbTx.network || 'USDT BEP-20',
+              status: dbTx.status || 'Pending',
+              createdAt: dbTx.createdAt || new Date()
+            };
+            this.pendingWithdrawals.set(txId, withdrawal);
+          }
+        }
+
         if (!withdrawal) {
           await this.bot.api.sendMessage({
             chat_id: chatId,
@@ -2125,10 +2191,9 @@ ${isGasEmpty
     if (!this.bot) return;
 
     try {
-      const txRes = await dbService.getTransactions(null, 10);
-      const pendingTxs = (txRes || []).filter(t => t.status === 'Pending');
+      const pendingTxs = await dbService.getPendingWithdrawals(20);
 
-      if (pendingTxs.length === 0 && this.pendingWithdrawals.size === 0) {
+      if (pendingTxs.length === 0) {
         await this.bot.api.sendMessage({
           chat_id: chatId,
           text: `✅ <b>No Pending Withdrawals!</b>\nAll user withdrawal requests have been processed and paid out.`,
@@ -2143,19 +2208,27 @@ ${isGasEmpty
       }
 
       let msg = `📋 <b>PENDING WITHDRAWAL REQUESTS (${pendingTxs.length}):</b>\n━━━━━━━━━━━━━━━━━━━━\n`;
+      const keyboard = [];
+
       pendingTxs.forEach((tx, idx) => {
         msg += `${idx + 1}. 🆔 <code>${tx.id}</code>\n   👤 User: <code>${tx.userId}</code> | 💰 <b>${tx.amount}</b>\n   📍 To: <code>${tx.recipientAddress || 'N/A'}</code>\n\n`;
+        if (idx < 5) {
+          keyboard.push([
+            { text: `✅ Approve ${tx.id}`, callback_data: `approve:${tx.id}` },
+            { text: `❌ Reject ${tx.id}`, callback_data: `reject:${tx.id}` }
+          ]);
+        }
       });
-      msg += `<i>Use the inline action cards above or click Approve & Pay to process.</i>`;
+      msg += `<i>Use the inline action buttons below to Approve & Pay or Reject:</i>`;
+
+      keyboard.push([{ text: '🔄 Refresh Dashboard', callback_data: 'cmd_dashboard' }]);
 
       await this.bot.api.sendMessage({
         chat_id: chatId,
         text: msg,
         parse_mode: 'HTML',
         reply_markup: {
-          inline_keyboard: [
-            [{ text: '🔄 Refresh Dashboard', callback_data: 'cmd_dashboard' }]
-          ]
+          inline_keyboard: keyboard
         }
       });
     } catch (err) {

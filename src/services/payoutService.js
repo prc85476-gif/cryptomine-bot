@@ -1,7 +1,14 @@
 const { ethers } = require('ethers');
 
-// BEP-20 USDT Standard Token Contract on BSC (Binance Smart Chain)
-const DEFAULT_BSC_RPC = process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org/';
+const BSC_RPCS = [
+  process.env.BSC_RPC_URL,
+  'https://bsc-dataseed.binance.org/',
+  'https://bsc-dataseed1.defibit.io/',
+  'https://bsc-dataseed2.defibit.io/',
+  'https://bsc-dataseed1.ninicoin.io/',
+  'https://bsc-rpc.publicnode.com'
+].filter(Boolean);
+
 const USDT_BEP20_CONTRACT = process.env.USDT_BEP20_CONTRACT || '0x55d398326f99059fF775485246999027B3197955';
 
 // ERC20 / BEP20 ABI Interface
@@ -16,16 +23,23 @@ const BEP20_ABI = [
 class PayoutService {
   constructor() {
     this.provider = null;
+    this.currentRpcIndex = 0;
     this.initProvider();
   }
 
   initProvider() {
     try {
-      const rpcUrl = process.env.BSC_RPC_URL || DEFAULT_BSC_RPC;
+      const rpcUrl = BSC_RPCS[this.currentRpcIndex % BSC_RPCS.length];
       this.provider = new ethers.JsonRpcProvider(rpcUrl);
     } catch (err) {
       console.error('Error initializing BSC RPC provider:', err.message);
     }
+  }
+
+  switchRpc() {
+    this.currentRpcIndex = (this.currentRpcIndex + 1) % BSC_RPCS.length;
+    this.initProvider();
+    console.log(`🔄 [Payout] Switched BSC RPC to ${BSC_RPCS[this.currentRpcIndex]}`);
   }
 
   getWallet() {
