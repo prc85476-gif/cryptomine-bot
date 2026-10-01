@@ -29,6 +29,12 @@ class MainBotService {
 
       this.isInitialized = true;
       console.log('🤖 Main User Telegram Bot initialized & listening for /start...');
+
+      // Set command suggestions in Telegram UI
+      this.bot.api.setMyCommands([
+        { command: 'start', description: '🚀 Open CryptoMine App & Mine' },
+        { command: 'help', description: '📖 How to Play & Mining Rules' }
+      ]).catch((err) => console.warn('⚠️ [Main Bot] setMyCommands notice:', err.message));
     } catch (err) {
       console.error('❌ Failed to initialize Main Telegram Bot:', err.message);
     }

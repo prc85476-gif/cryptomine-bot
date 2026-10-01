@@ -70,6 +70,25 @@ class TelegramBotService {
       this.isInitialized = true;
       console.log('🤖 Telegram Admin Bot initialized & connected with Neon DB (@acryptomintadminwithdraw2bot)...');
 
+      // Set command suggestions in Telegram UI
+      this.bot.api.setMyCommands([
+        { command: 'start', description: '🏠 Open Live Admin Dashboard' },
+        { command: 'admin', description: '🛡️ Master Control Dashboard' },
+        { command: 'broadcast', description: '📢 High-Speed Broadcast (Photo + Buttons)' },
+        { command: 'user', description: '🔍 Search & Manage User (NFT/Balance/Limit)' },
+        { command: 'activenft', description: '⚡ Activate NFT Mining Plan' },
+        { command: 'addbalance', description: '➕ Add Withdrawable USDT' },
+        { command: 'adddeposit', description: '🛍️ Add Deposit / NFT Balance' },
+        { command: 'deductbalance', description: '➖ Deduct USDT Balance' },
+        { command: 'setlimit', description: '⏱️ Set Daily Withdrawal Limit' },
+        { command: 'pending', description: '⏳ Pending Withdrawals' },
+        { command: 'balance', description: '💰 Wallet & Gas Balances' },
+        { command: 'ban', description: '🚫 Ban User Account' },
+        { command: 'unban', description: '🔓 Unban User Account' },
+        { command: 'help', description: '📖 Admin Commands Guide' },
+        { command: 'cancel', description: '❌ Cancel Active Operation' }
+      ]).catch((err) => console.warn('⚠️ [Admin Bot] setMyCommands notice:', err.message));
+
       // Preload saved admin chat ID from DB
       this.loadAdminChatId().catch(() => {});
 
