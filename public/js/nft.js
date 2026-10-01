@@ -283,8 +283,28 @@ const NFTModule = {
     }
 
     const numPrice = parseFloat(price) || 0;
-    const depBal = parseFloat(state.depositBalance !== undefined ? state.depositBalance : (state.user?.depositBalance ?? state.user?.nftBalance ?? 0)) || 0;
-    const mainBal = parseFloat(state.balance !== undefined ? state.balance : (state.user?.balance ?? 0)) || 0;
+    let depBal = 0;
+    if (state.depositBalance !== undefined && state.depositBalance !== null && !isNaN(parseFloat(state.depositBalance))) {
+      depBal = parseFloat(state.depositBalance);
+    } else if (state.user?.depositBalance !== undefined && state.user?.depositBalance !== null) {
+      depBal = parseFloat(state.user.depositBalance);
+    }
+    if (depBal <= 0) {
+      const domNftBal = document.getElementById('nft-balance-val')?.textContent;
+      if (domNftBal) depBal = parseFloat(domNftBal) || 0;
+    }
+
+    let mainBal = 0;
+    if (state.balance !== undefined && state.balance !== null && !isNaN(parseFloat(state.balance))) {
+      mainBal = parseFloat(state.balance);
+    } else if (state.user?.balance !== undefined && state.user?.balance !== null) {
+      mainBal = parseFloat(state.user.balance);
+    }
+    if (mainBal <= 0) {
+      const domBal = document.getElementById('total-balance-val')?.textContent;
+      if (domBal) mainBal = parseFloat(domBal) || 0;
+    }
+
     const totalAvail = parseFloat((depBal + mainBal).toFixed(4));
 
     if (totalAvail < numPrice) {
@@ -293,16 +313,8 @@ const NFTModule = {
       return;
     }
 
-    // Modal confirm buy
-    const modal = document.getElementById('modal-buy-nft');
-    if (modal) {
-      document.getElementById('buy-nft-name').textContent = name;
-      document.getElementById('buy-nft-price').textContent = `${numPrice} USDT`;
-      document.getElementById('btn-confirm-buy-nft').dataset.nftId = id;
-      window.ModalManager.openModal('modal-buy-nft');
-    } else {
-      this.executeBuy(id, name, numPrice);
-    }
+    // Direct execute purchase
+    this.executeBuy(id, name, numPrice);
   },
 
   async executeBuy(id, name, price) {
