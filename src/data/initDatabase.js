@@ -189,6 +189,13 @@ async function initDatabase() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_processed_deposits_tx ON processed_deposits(tx_hash);
+
+      -- 9. System Settings Table (Persists active admin chat IDs, system flags)
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key VARCHAR(100) PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
     `);
 
     console.log('✅ Neon PostgreSQL Database Initialized Successfully with 0 Balances!');

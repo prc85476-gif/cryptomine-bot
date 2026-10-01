@@ -6,7 +6,7 @@ const mainBotService = require('./mainBotService');
 class TelegramBotService {
   constructor() {
     this.bot = null;
-    this.adminChatId = process.env.ADMIN_CHAT_ID ? Number(process.env.ADMIN_CHAT_ID) || process.env.ADMIN_CHAT_ID : null;
+    this.adminChatId = process.env.ADMIN_CHAT_ID ? Number(process.env.ADMIN_CHAT_ID) || process.env.ADMIN_CHAT_ID : 8829204942;
     this.pendingWithdrawals = new Map();
     this.isInitialized = false;
     this.isPollingActive = false;
@@ -14,6 +14,39 @@ class TelegramBotService {
     this.lastBnbAlertState = null; // Tracks 'empty', 'low', 'ok'
     this.monitorInterval = null;
     this.adminSessions = new Map(); // Session state for interactive admin inputs
+  }
+
+  async loadAdminChatId() {
+    try {
+      const saved = await dbService.getSetting('active_admin_chat_id');
+      if (saved) {
+        this.adminChatId = Number(saved) || saved;
+      }
+    } catch (e) {}
+  }
+
+  async setAdminChatId(chatId) {
+    if (!chatId) return;
+    this.adminChatId = Number(chatId) || chatId;
+    try {
+      await dbService.setSetting('active_admin_chat_id', String(chatId));
+    } catch (e) {}
+  }
+
+  async getAdminChatIds() {
+    const chatIds = new Set();
+    if (this.adminChatId) chatIds.add(Number(this.adminChatId) || this.adminChatId);
+    if (process.env.ADMIN_CHAT_ID) chatIds.add(Number(process.env.ADMIN_CHAT_ID) || process.env.ADMIN_CHAT_ID);
+    
+    // Always include authorized owner @ownerof421 (8829204942)
+    chatIds.add(8829204942);
+
+    try {
+      const saved = await dbService.getSetting('active_admin_chat_id');
+      if (saved) chatIds.add(Number(saved) || saved);
+    } catch (e) {}
+
+    return Array.from(chatIds);
   }
 
   init() {
@@ -36,6 +69,9 @@ class TelegramBotService {
 
       this.isInitialized = true;
       console.log('🤖 Telegram Admin Bot initialized & connected with Neon DB (@acryptomintadminwithdraw2bot)...');
+
+      // Preload saved admin chat ID from DB
+      this.loadAdminChatId().catch(() => {});
 
       // Preload pending withdrawals from DB
       this.loadPendingWithdrawalsFromDB().catch(() => {});
@@ -2300,9 +2336,9 @@ ${isGasEmpty
       return;
     }
 
-    const targetChatId = this.adminChatId || process.env.ADMIN_CHAT_ID;
-    if (!targetChatId) {
-      console.warn('⚠️ No Admin Chat ID configured yet. Please open the bot (@acryptomintadminwithdraw2bot) and send /start to link.');
+    const adminChatIds = await this.getAdminChatIds();
+    if (!adminChatIds || adminChatIds.length === 0) {
+      console.warn('⚠️ No Admin Chat ID configured yet.');
       return;
     }
 
@@ -2310,12 +2346,14 @@ ${isGasEmpty
     const isUrl = cleanTxHash.startsWith('http://') || cleanTxHash.startsWith('https://');
     const bscScanUrl = isUrl ? cleanTxHash : `https://bscscan.com/tx/${cleanTxHash}`;
     const nowUtc = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+    const cleanUsername = (username || '').replace(/^@/, '');
+    const userDisplay = cleanUsername ? `@${this.escapeHtml(cleanUsername)}` : 'N/A';
 
     const alertMessage = `📥 <b>🚨 NEW DEPOSIT ALERT!</b>
 ━━━━━━━━━━━━━━━━━━━━
-👤 <b>Username:</b> @${username || 'N/A'}
+👤 <b>User:</b> ${userDisplay}
 🆔 <b>UID:</b> <code>${userId}</code>
-📛 <b>Name:</b> ${name || 'Alex Miner'}
+📛 <b>Name:</b> ${this.escapeHtml(name || 'Miner')}
 💰 <b>Deposit Amount:</b> <code>+${parseFloat(amount).toFixed(2)} USDT</code>
 🌐 <b>Network:</b> ${network || 'USDT BEP-20'}
 👥 <b>Total Referrals:</b> ${totalReferrals || 0} Users
@@ -2332,7 +2370,6 @@ ${isGasEmpty
 👇 <b>Choose an action below:</b>`;
 
     const options = {
-      chat_id: targetChatId,
       text: alertMessage,
       parse_mode: 'HTML',
       reply_markup: {
@@ -2348,11 +2385,16 @@ ${isGasEmpty
       }
     };
 
-    try {
-      const sent = await this.bot.api.sendMessage(options);
-      return sent;
-    } catch (err) {
-      console.error('❌ Failed to send Telegram deposit alert:', err.message);
+    for (const chatId of adminChatIds) {
+      try {
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          ...options
+        });
+        console.log(`📥 [Admin Bot] Deposit alert sent successfully to admin chat ${chatId}`);
+      } catch (err) {
+        console.error(`❌ Failed to send Telegram deposit alert to ${chatId}:`, err.message);
+      }
     }
   }
 
@@ -2393,20 +2435,22 @@ ${isGasEmpty
       return;
     }
 
-    const targetChatId = this.adminChatId || process.env.ADMIN_CHAT_ID;
-    if (!targetChatId) {
-      console.warn('⚠️ No Admin Chat ID configured yet. Please open the Telegram bot and send /start to link your chat ID.');
+    const adminChatIds = await this.getAdminChatIds();
+    if (!adminChatIds || adminChatIds.length === 0) {
+      console.warn('⚠️ No Admin Chat ID configured yet.');
       return;
     }
 
     const nowUtc = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
     const computedTotalBal = totalBalance !== undefined ? parseFloat(totalBalance).toFixed(4) : (parseFloat(mainBalance || 0) + parseFloat(depositBalance || 0)).toFixed(4);
+    const cleanUsername = (username || '').replace(/^@/, '');
+    const userDisplay = cleanUsername ? `@${this.escapeHtml(cleanUsername)}` : 'Anonymous';
 
     const alertMessage = `🚨 <b>NEW WITHDRAWAL REQUEST</b> 🚨
 ━━━━━━━━━━━━━━━━━━━━
 🆔 <b>Tx ID:</b> <code>${txId}</code>
-👤 <b>User:</b> @${username || 'Anonymous'} (UID: <code>${userId}</code>)
-📛 <b>Name:</b> ${name || 'Alex Miner'}
+👤 <b>User:</b> ${userDisplay} (UID: <code>${userId}</code>)
+📛 <b>Name:</b> ${this.escapeHtml(name || 'Miner')}
 ━━━━━━━━━━━━━━━━━━━━
 💰 <b>USER BALANCE & PROFILE:</b>
 • 💎 <b>Main (Withdrawable):</b> <code>${parseFloat(mainBalance || 0).toFixed(4)} USDT</code>
@@ -2432,7 +2476,6 @@ ${isGasEmpty
 <i>Click Approve & Pay to execute payout.</i>`;
 
     const options = {
-      chat_id: targetChatId,
       text: alertMessage,
       parse_mode: 'HTML',
       disable_web_page_preview: true,
@@ -2449,11 +2492,16 @@ ${isGasEmpty
       }
     };
 
-    try {
-      const sent = await this.bot.api.sendMessage(options);
-      return sent;
-    } catch (err) {
-      console.error('❌ Failed to send Telegram withdrawal alert:', err.message);
+    for (const chatId of adminChatIds) {
+      try {
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          ...options
+        });
+        console.log(`📤 [Admin Bot] Withdrawal request alert sent successfully to admin chat ${chatId}`);
+      } catch (err) {
+        console.error(`❌ Failed to send Telegram withdrawal alert to ${chatId}:`, err.message);
+      }
     }
   }
 
@@ -2557,31 +2605,34 @@ ${isGasEmpty
    * Send real-time multi-account alert to Admin (@ownerof421)
    */
   async notifyMultiAccountAbuse(info) {
-    const adminId = this.adminChatId || process.env.ADMIN_CHAT_ID;
-    if (!adminId || !this.bot) return;
+    if (!this.bot) return;
+    const adminChatIds = await this.getAdminChatIds();
+    if (!adminChatIds || adminChatIds.length === 0) return;
 
     try {
       const text = `🚨 <b>MULTI-ACCOUNT ABUSE DETECTED & AUTO-BANNED!</b>
 ━━━━━━━━━━━━━━━━━━━━
-👤 <b>Offending UID:</b> <code>${info.userId}</code> (@${info.username || 'unknown'})
-🔗 <b>Matched User:</b> <code>${info.matchedUserId || 'N/A'}</code> (@${info.matchedUsername || 'unknown'})
+👤 <b>Offending UID:</b> <code>${info.userId}</code> (@${this.escapeHtml(info.username || 'unknown')})
+🔗 <b>Matched User:</b> <code>${info.matchedUserId || 'N/A'}</code> (@${this.escapeHtml(info.matchedUsername || 'unknown')})
 📱 <b>Device FP:</b> <code>${(info.deviceFp || 'N/A').slice(0, 24)}...</code>
 🌐 <b>IP Address:</b> <code>${info.ip || 'N/A'}</code>
-⚠️ <b>Reason:</b> <i>${info.reason || 'Multiple accounts from same device/IP'}</i>
+⚠️ <b>Reason:</b> <i>${this.escapeHtml(info.reason || 'Multiple accounts from same device/IP')}</i>
 ━━━━━━━━━━━━━━━━━━━━
 🔒 <i>New account has been automatically suspended and referral rewards cancelled.</i>`;
 
-      await this.bot.api.sendMessage({
-        chat_id: adminId,
-        text,
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '👤 Offender Info', callback_data: `ban:${info.userId}` }],
-            [{ text: '🔄 Admin Dashboard', callback_data: 'cmd_dashboard' }]
-          ]
-        }
-      });
+      for (const adminId of adminChatIds) {
+        await this.bot.api.sendMessage({
+          chat_id: adminId,
+          text,
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '👤 Offender Info', callback_data: `ban:${info.userId}` }],
+              [{ text: '🔄 Admin Dashboard', callback_data: 'cmd_dashboard' }]
+            ]
+          }
+        }).catch(() => {});
+      }
     } catch (err) {
       console.warn('notifyMultiAccountAbuse error:', err.message);
     }

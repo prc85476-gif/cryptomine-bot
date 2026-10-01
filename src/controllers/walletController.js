@@ -41,7 +41,7 @@ exports.createDepositIntent = async (req, res) => {
     }
 
     const user = await dbService.getUser(req.userId, req.userMeta);
-    const intent = depositWatcherService.registerIntent({
+    const intent = await depositWatcherService.registerIntent({
       userId: req.userId,
       telegramId: user.telegramId || req.userId,
       username: user.username || user.name || 'Miner',

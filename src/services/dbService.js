@@ -1793,6 +1793,39 @@ class DBService {
       return null;
     }
   }
+
+  /**
+   * Get system setting by key
+   */
+  async getSetting(key) {
+    try {
+      const res = await db.query('SELECT value FROM system_settings WHERE key = $1', [key]);
+      return res.rows.length > 0 ? res.rows[0].value : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  /**
+   * Set system setting by key
+   */
+  async setSetting(key, value) {
+    try {
+      await db.query(`
+        INSERT INTO system_settings (key, value, updated_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();
+      `, [key, String(value)]);
+      return true;
+    } catch (err) {
+      console.warn('DBService.setSetting Error:', err.message);
+      return false;
+    }
+  }
+
+  async query(text, params) {
+    return db.query(text, params);
+  }
 }
 
 module.exports = new DBService();
