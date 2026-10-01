@@ -432,8 +432,12 @@ class MainBotService {
   async notifyReferrerCommission(referrerId, amount, tier, sourceAction) {
     if (!referrerId) return;
     try {
-      const amtStr = (amount && Number(amount) > 0) ? `${parseFloat(amount).toFixed(4)}` : '0.0200';
-      const msg = `🎉 <b>Referral Commission Received!</b> 💰\n━━━━━━━━━━━━━━━━━━━━\n💵 <b>Amount:</b> +${amtStr} USDT\n⚡ <b>Source:</b> ${sourceAction || 'Mining Claim'}\n\n✅ <i>Funds credited directly to your withdrawable balance!</i>`;
+      const displayAmt = '0.0100';
+      const sourceDesc = (sourceAction === 'Mining Claim' || !sourceAction)
+        ? 'Your friend 24 hours mining claim reward 0.01$'
+        : `Your friend ${sourceAction} reward 0.01$`;
+
+      const msg = `🎉 <b>Referral Commission Received!</b> 💰\n━━━━━━━━━━━━━━━━━━━━\n💵 <b>Amount:</b> +${displayAmt} USDT\n⚡ <b>Source:</b> ${sourceDesc}\n\n✅ <i>Funds credited directly to your withdrawable balance!</i>`;
       await this.sendMessageToUser(referrerId, {
         text: msg,
         parse_mode: 'HTML'

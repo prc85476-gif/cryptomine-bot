@@ -756,8 +756,8 @@ class DBService {
       const actor = uRes.rows[0];
       const tier1Id = actor.referrer_id;
 
-      // Tier 1 direct referrer gets flat 0.02$ (0.0200 USDT) added to their main withdrawable balance
-      const comm1 = 0.0200;
+      // Tier 1 direct referrer gets flat 0.005$ (0.0050 USDT) added to their main withdrawable balance
+      const comm1 = 0.0050;
       if (tier1Id) {
         await db.query(`
           UPDATE users 
