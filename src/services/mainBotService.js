@@ -126,34 +126,58 @@ class MainBotService {
           ]
         };
 
-        // 5. Fast Photo Delivery with Caption and "Mint NFT" WebApp Button (< 300ms)
-        const photoCandidates = [
-          path.join(process.cwd(), 'public/assets/images/invite-banner.png'),
-          path.join(__dirname, '../../public/assets/images/invite-banner.png'),
-          path.join(process.cwd(), 'public/assets/images/nft/miner-robot.png'),
-          path.join(__dirname, '../../public/assets/images/nft/miner-robot.png')
-        ];
-        let validPhotoPath = null;
-        for (const cand of photoCandidates) {
-          if (fs.existsSync(cand)) {
-            validPhotoPath = cand;
-            break;
-          }
-        }
-
+        // 5. Instant Photo Delivery with Caption and "Mint NFT" WebApp Button (< 100ms)
         let sent = false;
-        if (validPhotoPath && InputFile) {
+        
+        // Try sending via cached Telegram file_id first (zero latency)
+        if (this.cachedBannerFileId) {
           try {
             await this.bot.api.sendPhoto({
               chat_id: chatId,
-              photo: new InputFile(validPhotoPath),
+              photo: this.cachedBannerFileId,
               caption: welcomeMessage,
               parse_mode: 'HTML',
               reply_markup: replyMarkup
             });
             sent = true;
-          } catch (photoErr) {
-            console.warn('sendPhoto error in /start, trying fallback:', photoErr.message);
+          } catch (e) {
+            this.cachedBannerFileId = null;
+          }
+        }
+
+        if (!sent) {
+          const photoCandidates = [
+            path.join(process.cwd(), 'public/assets/images/invite-banner.png'),
+            path.join(__dirname, '../../public/assets/images/invite-banner.png'),
+            path.join(process.cwd(), 'public/assets/images/nft/miner-robot.png'),
+            path.join(__dirname, '../../public/assets/images/nft/miner-robot.png')
+          ];
+          let validPhotoPath = null;
+          for (const cand of photoCandidates) {
+            if (fs.existsSync(cand)) {
+              validPhotoPath = cand;
+              break;
+            }
+          }
+
+          if (validPhotoPath && InputFile) {
+            try {
+              const fileBuf = fs.readFileSync(validPhotoPath);
+              const photoFile = new InputFile(fileBuf, 'invite-banner.png');
+              const photoRes = await this.bot.api.sendPhoto({
+                chat_id: chatId,
+                photo: photoFile,
+                caption: welcomeMessage,
+                parse_mode: 'HTML',
+                reply_markup: replyMarkup
+              });
+              if (photoRes?.photo?.[0]?.file_id) {
+                this.cachedBannerFileId = photoRes.photo[photoRes.photo.length - 1].file_id;
+              }
+              sent = true;
+            } catch (photoErr) {
+              console.warn('sendPhoto error in /start, trying fallback:', photoErr.message);
+            }
           }
         }
 

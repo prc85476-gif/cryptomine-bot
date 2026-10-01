@@ -815,6 +815,9 @@ class DBService {
         };
       }
 
+      // Ensure user exists first
+      await this.getUser(tgId);
+
       await db.query(`
         INSERT INTO streaks_tasks (
           user_id, streak_current_day, streak_claimed_today, completed_task_ids
