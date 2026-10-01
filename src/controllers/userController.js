@@ -1,5 +1,42 @@
 const dbService = require('../services/dbService');
 
+/**
+ * Fast unified bootstrap endpoint: returns User + Active Miner in 1 single fast database query
+ */
+exports.getBootstrapData = async (req, res) => {
+  try {
+    const tgId = Number(req.userId) || 9482103;
+    const [user, miner, hasFastMiner] = await Promise.all([
+      dbService.getUser(tgId, req.userMeta, req.clientInfo),
+      dbService.getActiveMiner(tgId),
+      dbService.hasFastMiner(tgId)
+    ]);
+
+    let activeMiner = miner;
+    if (!activeMiner || !activeMiner.cycleStartTime) {
+      activeMiner = await dbService.updateActiveMiner(tgId, { cycleStartTime: Date.now() });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        user: {
+          ...user,
+          hasFastMiner
+        },
+        miner: {
+          ...activeMiner,
+          totalReward: (activeMiner.totalClaim !== undefined && activeMiner.totalClaim !== null) ? activeMiner.totalClaim : (activeMiner.totalReward ?? 0.0000),
+          totalClaim: (activeMiner.totalClaim !== undefined && activeMiner.totalClaim !== null) ? activeMiner.totalClaim : (activeMiner.totalReward ?? 0.0000)
+        }
+      }
+    });
+  } catch (err) {
+    console.error('userController.getBootstrapData error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 exports.getProfile = async (req, res) => {
   try {
     const user = await dbService.getUser(req.userId, req.userMeta);

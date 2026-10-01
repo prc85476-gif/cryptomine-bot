@@ -19,20 +19,54 @@ const App = {
     this.bindQuickActions();
     this.bindUpgradeModalAction();
 
-    // 5. Fetch Initial State from Backend
-    await this.fetchInitialData();
+    // 5. Instantly render from local cache in 0ms so user sees everything in 0-1 second!
+    this.renderCachedData();
 
-    // 6. Initialize Sub-modules
+    // 6. Initialize Mining Module Loop immediately
     window.MiningModule.init();
-    window.NFTModule.init();
-    window.PremiumModule.init();
-    window.TasksModule.init();
-    window.ReferralModule?.init();
-    window.WalletModule.init();
+
+    // 7. Bind Interactive Module Events (0ms, purely client-side DOM bindings)
+    window.WalletModule?.init();
     window.GiftBoxModule?.init();
+    window.NFTModule?.bindFilterEvents();
+    window.ReferralModule?.bindEvents();
+
+    // 8. Fetch Fast Bootstrap State from Backend and smoothly sync in background
+    this.fetchInitialData();
+
+    // 9. Background low-priority modules
     window.LiveWithdrawalPopup?.init();
 
     console.log('✅ CryptoMine UI ready!');
+  },
+
+  renderCachedData() {
+    try {
+      const cachedUser = localStorage.getItem('cm_cached_user');
+      const cachedMiner = localStorage.getItem('cm_cached_miner');
+
+      if (cachedUser) {
+        const u = JSON.parse(cachedUser);
+        window.appState.setState({
+          user: u,
+          balance: parseFloat(u.balance || 0),
+          depositBalance: parseFloat(u.depositBalance || 0),
+          miningRate: parseFloat(u.miningRate || 0.0200)
+        });
+        this.updateUserUI(u);
+      }
+
+      if (cachedMiner) {
+        const m = JSON.parse(cachedMiner);
+        window.appState.setState({ activeMiner: m });
+        this.updateActiveMinerUI(m);
+        if (window.MiningModule && m.cycleStartTime) {
+          window.MiningModule.setCycleStartTime(m.cycleStartTime);
+        }
+      }
+    } catch (e) {
+      console.warn('Cache render warning:', e);
+    }
   },
 
   initTheme() {
@@ -76,36 +110,44 @@ const App = {
 
   async fetchInitialData() {
     try {
-      const [userRes, minerRes] = await Promise.all([
-        window.ApiService.getUserProfile(),
-        window.ApiService.getActiveMiner()
-      ]);
+      const res = await window.ApiService.getBootstrapData();
 
-      if (userRes.banned === true || userRes.data?.isBanned === true) {
-        this.showBannedScreen();
+      if (res.banned === true || res.data?.user?.isBanned === true) {
+        this.showBannedScreen(res.message);
         return;
       }
 
-      if (userRes.success && userRes.data) {
-        const depBal = parseFloat(userRes.data.depositBalance !== undefined ? userRes.data.depositBalance : (userRes.data.nftBalance || 0)) || 0;
-        const mainBal = parseFloat(userRes.data.balance || 0) || 0;
+      if (res.success && res.data) {
+        const user = res.data.user;
+        const miner = res.data.miner;
+
+        const depBal = parseFloat(user.depositBalance !== undefined ? user.depositBalance : (user.nftBalance || 0)) || 0;
+        const mainBal = parseFloat(user.balance || 0) || 0;
+
         window.appState.setState({
-          user: userRes.data,
+          user: user,
           balance: mainBal,
           depositBalance: depBal,
-          miningRate: userRes.data.miningRate
+          miningRate: user.miningRate,
+          activeMiner: miner
         });
-        this.updateUserUI(userRes.data);
-      }
 
-      if (minerRes.success && minerRes.data) {
-        window.appState.setState({
-          activeMiner: minerRes.data.miner
-        });
-        this.updateActiveMinerUI(minerRes.data.miner);
+        this.updateUserUI(user);
+        if (miner) {
+          this.updateActiveMinerUI(miner);
+          if (window.MiningModule && miner.cycleStartTime) {
+            window.MiningModule.setCycleStartTime(miner.cycleStartTime);
+          }
+        }
+
+        // Cache for 0ms instant reload next time
+        try {
+          localStorage.setItem('cm_cached_user', JSON.stringify(user));
+          if (miner) localStorage.setItem('cm_cached_miner', JSON.stringify(miner));
+        } catch (e) {}
       }
     } catch (err) {
-      console.error('Error fetching initial data:', err);
+      console.error('Error fetching bootstrap data:', err);
     }
   },
 

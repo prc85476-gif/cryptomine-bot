@@ -3,6 +3,8 @@
  */
 const API_BASE = '/api';
 
+let cachedDeviceFingerprint = null;
+
 function safeHeader(val) {
   if (!val) return '';
   try {
@@ -13,6 +15,7 @@ function safeHeader(val) {
 }
 
 function getDeviceFingerprint() {
+  if (cachedDeviceFingerprint) return cachedDeviceFingerprint;
   try {
     let persistentId = localStorage.getItem('cm_dfp_v2');
     if (!persistentId) {
@@ -82,9 +85,11 @@ function getDeviceFingerprint() {
       sigHash |= 0;
     }
 
-    return `${persistentId}_${Math.abs(sigHash).toString(36)}`;
+    cachedDeviceFingerprint = `${persistentId}_${Math.abs(sigHash).toString(36)}`;
+    return cachedDeviceFingerprint;
   } catch (err) {
-    return 'fp_fallback_' + (localStorage.getItem('cm_dfp_v2') || 'unknown');
+    cachedDeviceFingerprint = 'fp_fallback_' + (localStorage.getItem('cm_dfp_v2') || 'unknown');
+    return cachedDeviceFingerprint;
   }
 }
 
@@ -153,6 +158,7 @@ const ApiService = {
   },
 
   // User
+  getBootstrapData() { return this.get('/user/bootstrap'); },
   getUserProfile() { return this.get('/user/profile'); },
   updateSettings(data) { return this.post('/user/settings', data); },
   claimGiftBox(data = {}) { return this.post('/user/claim-gift', data); },
