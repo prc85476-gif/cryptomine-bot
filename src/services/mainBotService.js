@@ -129,7 +129,7 @@ class MainBotService {
         // 5. Instant Photo Delivery with Caption and "Mint NFT" WebApp Button (< 100ms)
         let sent = false;
         
-        // Try sending via cached Telegram file_id first (zero latency)
+        // 1. Try sending via cached Telegram file_id first (sub-50ms latency)
         if (this.cachedBannerFileId) {
           try {
             await this.bot.api.sendPhoto({
@@ -145,6 +145,27 @@ class MainBotService {
           }
         }
 
+        // 2. Try sending via hosted URL if Mini App URL is valid HTTPS (zero container bandwidth overhead)
+        if (!sent && baseAppUrl.startsWith('http') && !baseAppUrl.includes('localhost') && !baseAppUrl.includes('cryptomine-app.com')) {
+          try {
+            const bannerUrl = `${baseAppUrl.replace(/\/$/, '')}/assets/images/invite-banner.png`;
+            const photoRes = await this.bot.api.sendPhoto({
+              chat_id: chatId,
+              photo: bannerUrl,
+              caption: welcomeMessage,
+              parse_mode: 'HTML',
+              reply_markup: replyMarkup
+            });
+            if (photoRes?.photo?.length > 0) {
+              this.cachedBannerFileId = photoRes.photo[photoRes.photo.length - 1].file_id;
+            }
+            sent = true;
+          } catch (urlErr) {
+            // URL delivery failed, continue to local file or text fallback
+          }
+        }
+
+        // 3. Try sending local file buffer if available
         if (!sent) {
           const photoCandidates = [
             path.join(process.cwd(), 'public/assets/images/invite-banner.png'),
@@ -171,12 +192,12 @@ class MainBotService {
                 parse_mode: 'HTML',
                 reply_markup: replyMarkup
               });
-              if (photoRes?.photo?.[0]?.file_id) {
+              if (photoRes?.photo?.length > 0) {
                 this.cachedBannerFileId = photoRes.photo[photoRes.photo.length - 1].file_id;
               }
               sent = true;
             } catch (photoErr) {
-              console.warn('sendPhoto error in /start, trying fallback:', photoErr.message);
+              // Local buffer upload failed, falling back to text
             }
           }
         }

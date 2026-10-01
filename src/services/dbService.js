@@ -136,7 +136,10 @@ class DBService {
           $6, 'Standard Tier', 1.00, null, $7,
           false, null, $8, $9, $10,
           1, 0, 0.0000
-        ) RETURNING *;
+        ) 
+        ON CONFLICT (telegram_id) DO UPDATE SET 
+          updated_at = NOW()
+        RETURNING *;
       `, [
         tgId,
         username,
