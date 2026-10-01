@@ -126,71 +126,39 @@ class MainBotService {
           ]
         };
 
-        // 6. Send Video with Caption and "Mint NFT" WebApp Button
-        let videoSent = false;
-        const videoCandidates = [
-          path.join(process.cwd(), 'public/assets/videos/welcome.mp4'),
-          path.join(__dirname, '../../public/assets/videos/welcome.mp4'),
-          path.join(process.cwd(), 'icon logo/gemini_generated_video_22e01621.mp4'),
-          path.join(__dirname, '../../icon logo/gemini_generated_video_22e01621.mp4')
+        // 5. Fast Photo Delivery with Caption and "Mint NFT" WebApp Button (< 300ms)
+        const photoCandidates = [
+          path.join(process.cwd(), 'public/assets/images/invite-banner.png'),
+          path.join(__dirname, '../../public/assets/images/invite-banner.png'),
+          path.join(process.cwd(), 'public/assets/images/nft/miner-robot.png'),
+          path.join(__dirname, '../../public/assets/images/nft/miner-robot.png')
         ];
-
-        let validVideoPath = null;
-        for (const candidate of videoCandidates) {
-          if (fs.existsSync(candidate)) {
-            validVideoPath = candidate;
+        let validPhotoPath = null;
+        for (const cand of photoCandidates) {
+          if (fs.existsSync(cand)) {
+            validPhotoPath = cand;
             break;
           }
         }
 
-        if (validVideoPath && InputFile) {
+        let sent = false;
+        if (validPhotoPath && InputFile) {
           try {
-            await this.bot.api.sendVideo({
+            await this.bot.api.sendPhoto({
               chat_id: chatId,
-              video: new InputFile(validVideoPath),
+              photo: new InputFile(validPhotoPath),
               caption: welcomeMessage,
               parse_mode: 'HTML',
               reply_markup: replyMarkup
             });
-            videoSent = true;
-          } catch (videoErr) {
-            console.warn('sendVideo error in /start, trying fallback:', videoErr.message);
+            sent = true;
+          } catch (photoErr) {
+            console.warn('sendPhoto error in /start, trying fallback:', photoErr.message);
           }
         }
 
-        // If local video upload was not completed, try sending via static URL or photo
-        if (!videoSent) {
-          const photoCandidates = [
-            path.join(process.cwd(), 'public/assets/images/invite-banner.png'),
-            path.join(__dirname, '../../public/assets/images/invite-banner.png'),
-            path.join(process.cwd(), 'public/assets/images/nft/miner-robot.png'),
-            path.join(__dirname, '../../public/assets/images/nft/miner-robot.png')
-          ];
-          let validPhotoPath = null;
-          for (const cand of photoCandidates) {
-            if (fs.existsSync(cand)) {
-              validPhotoPath = cand;
-              break;
-            }
-          }
-          if (validPhotoPath && InputFile) {
-            try {
-              await this.bot.api.sendPhoto({
-                chat_id: chatId,
-                photo: new InputFile(validPhotoPath),
-                caption: welcomeMessage,
-                parse_mode: 'HTML',
-                reply_markup: replyMarkup
-              });
-              videoSent = true;
-            } catch (photoErr) {
-              console.warn('sendPhoto error in /start, trying fallback:', photoErr.message);
-            }
-          }
-        }
-
-        // Fallback to text message if media delivery fails
-        if (!videoSent) {
+        // Fallback to text message if photo delivery fails
+        if (!sent) {
           await this.bot.api.sendMessage({
             chat_id: chatId,
             text: welcomeMessage,
@@ -412,10 +380,17 @@ class MainBotService {
   async notifyReferrerNewUser(referrerId, newUsername, newFirstName) {
     if (!referrerId) return;
     try {
-      const msg = `🎉 <b>New Referral Joined!</b> 👥`;
+      const displayName = newFirstName || (newUsername ? `@${newUsername.replace(/^@/, '')}` : 'Miner');
+      const msg = `🎉 <b>New Referral Joined!</b> 👥\n━━━━━━━━━━━━━━━━━━━━\n👤 <b>Referred Miner:</b> ${displayName}\n🎁 <b>Reward:</b> +1 Mystery Gift Box added to your account!\n\n💎 <i>Open your Mystery Gift Box in the Mini App to claim rewards!</i>`;
+      const appUrl = (process.env.MINI_APP_URL || 'https://cryptomine-app.com').trim();
       await this.sendMessageToUser(referrerId, {
         text: msg,
-        parse_mode: 'HTML'
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🎁 Open Mystery Box', web_app: { url: appUrl } }]
+          ]
+        }
       });
     } catch (err) {
       console.warn('notifyReferrerNewUser warning:', err.message);
@@ -428,8 +403,8 @@ class MainBotService {
   async notifyReferrerCommission(referrerId, amount, tier, sourceAction) {
     if (!referrerId) return;
     try {
-      const amtStr = (amount && Number(amount) > 0) ? `${parseFloat(amount).toFixed(2)}$` : '0.02$';
-      const msg = `🎉  <b>Referral comition ${amtStr}!</b> 👥`;
+      const amtStr = (amount && Number(amount) > 0) ? `${parseFloat(amount).toFixed(4)}` : '0.0200';
+      const msg = `🎉 <b>Referral Commission Received!</b> 💰\n━━━━━━━━━━━━━━━━━━━━\n💵 <b>Amount:</b> +${amtStr} USDT\n⚡ <b>Source:</b> ${sourceAction || 'Mining Claim'}\n\n✅ <i>Funds credited directly to your withdrawable balance!</i>`;
       await this.sendMessageToUser(referrerId, {
         text: msg,
         parse_mode: 'HTML'

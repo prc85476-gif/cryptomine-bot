@@ -346,8 +346,8 @@ const App = {
     const uid = tgUser?.id || user.id || "9482103";
     const avatarUrl = tgUser?.photo_url || user.avatar || "/assets/images/nft/miner-robot.png";
 
-    if (elBal) elBal.textContent = Number(user.balance).toFixed(4);
-    if (elNftBal) elNftBal.textContent = Number(user.depositBalance ?? user.nftBalance ?? 30.00).toFixed(2);
+    if (elBal) elBal.textContent = Number(user.balance || 0).toFixed(4);
+    if (elNftBal) elNftBal.textContent = Number(user.depositBalance ?? user.nftBalance ?? 0.00).toFixed(2);
     if (elRate) elRate.textContent = `+${Number(user.miningRate).toFixed(4)} USDT/d`;
     if (elUser) elUser.textContent = displayName;
     if (elProfName) elProfName.textContent = displayName;

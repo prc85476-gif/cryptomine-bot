@@ -6,7 +6,8 @@ class StateStore {
     this.state = {
       user: null,
       activeMiner: null,
-      balance: 25.4867,
+      balance: 0.0000,
+      depositBalance: 0.00,
       miningRate: 0.0200,
       streak: null,
       tasks: [],

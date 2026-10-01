@@ -11,6 +11,7 @@ class DBService {
 
     const numericPart = parseInt(cleanStr.replace(/\D/g, ''), 10) || 0;
     const directNum = isNaN(cleanStr) ? 0 : Number(cleanStr);
+    const cleanUsername = cleanStr.replace(/^@/, '');
 
     try {
       const res = await db.query(`
@@ -18,19 +19,23 @@ class DBService {
         WHERE UPPER(referral_code) = UPPER($1)
            OR UPPER(referral_code) = UPPER($2)
            OR UPPER(referral_code) = UPPER($3)
-           OR telegram_id = $4
-           OR telegram_id = $5
+           OR (telegram_id > 0 AND telegram_id = $4)
+           OR (telegram_id > 0 AND telegram_id = $5)
+           OR LOWER(username) = LOWER($6)
+           OR LOWER(username) = LOWER($7)
         LIMIT 1;
       `, [
         cleanStr,
         `REF-${cleanStr.replace(/^(REF|ref)-/i, '')}`,
         `CRYPTO-${cleanStr.replace(/^(CRYPTO|crypto)-/i, '')}`,
         directNum,
-        numericPart
+        numericPart,
+        cleanUsername,
+        `@${cleanUsername}`
       ]);
 
       if (res.rows.length > 0) {
-        return res.rows[0].telegram_id;
+        return Number(res.rows[0].telegram_id);
       }
     } catch (err) {
       console.warn('findReferrerIdByCode warning:', err.message);
@@ -39,7 +44,7 @@ class DBService {
   }
 
   /**
-   * Get or create a user by Telegram ID with Anti-Multi Account Protection
+   * Get or create a user by Telegram ID
    */
   async getUser(telegramId = 9482103, meta = {}, clientInfo = {}) {
     try {
@@ -69,46 +74,32 @@ class DBService {
         if (deviceFp && !existing.device_fingerprint) updates.device_fingerprint = deviceFp;
         if (userAgent && !existing.user_agent) updates.user_agent = userAgent;
 
-        // If user already exists in DB but doesn't have a referrer_id linked yet
-        if (!existing.referrer_id && effectiveReferrerId && !existing.is_banned) {
-          // Check if self-referring from same device / IP
-          let isSelfRef = false;
-          if (deviceFp || clientIp) {
-            const refCheck = await db.query('SELECT telegram_id, last_ip, device_fingerprint FROM users WHERE telegram_id = $1', [effectiveReferrerId]);
-            if (refCheck.rows.length > 0) {
-              const rUser = refCheck.rows[0];
-              if ((deviceFp && rUser.device_fingerprint === deviceFp) || (clientIp && clientIp !== '127.0.0.1' && rUser.last_ip === clientIp)) {
-                isSelfRef = true;
-              }
+        // If user already exists in DB but doesn't have a referrer_id linked yet, link now
+        if (!existing.referrer_id && effectiveReferrerId && effectiveReferrerId !== tgId && !existing.is_banned) {
+          await db.query('UPDATE users SET referrer_id = $1 WHERE telegram_id = $2', [effectiveReferrerId, tgId]);
+          existing.referrer_id = effectiveReferrerId;
+
+          await this.addReferral(effectiveReferrerId, {
+            referredId: tgId,
+            username: existing.username,
+            firstName: existing.first_name,
+            level: 1,
+            commissionEarned: 0.00
+          });
+
+          // Award +1 Mystery Gift Box to referrer
+          await db.query(`
+            UPDATE users 
+            SET gift_boxes_available = COALESCE(gift_boxes_available, 0) + 1 
+            WHERE telegram_id = $1;
+          `, [effectiveReferrerId]);
+
+          try {
+            const mainBotService = require('./mainBotService');
+            if (mainBotService?.notifyReferrerNewUser) {
+              mainBotService.notifyReferrerNewUser(effectiveReferrerId, existing.username, existing.first_name);
             }
-          }
-
-          if (!isSelfRef) {
-            await db.query('UPDATE users SET referrer_id = $1 WHERE telegram_id = $2', [effectiveReferrerId, tgId]);
-            existing.referrer_id = effectiveReferrerId;
-
-            await this.addReferral(effectiveReferrerId, {
-              referredId: tgId,
-              username: existing.username,
-              firstName: existing.first_name,
-              level: 1,
-              commissionEarned: 0.00
-            });
-
-            // Award +1 Mystery Gift Box to referrer
-            await db.query(`
-              UPDATE users 
-              SET gift_boxes_available = COALESCE(gift_boxes_available, 0) + 1 
-              WHERE telegram_id = $1;
-            `, [effectiveReferrerId]);
-
-            try {
-              const mainBotService = require('./mainBotService');
-              if (mainBotService?.notifyReferrerNewUser) {
-                mainBotService.notifyReferrerNewUser(effectiveReferrerId, existing.username, existing.first_name);
-              }
-            } catch (e) {}
-          }
+          } catch (e) {}
         }
 
         // Optionally update profile details if new metadata provided
@@ -123,44 +114,7 @@ class DBService {
         return this.formatUser(existing);
       }
 
-      // --- MULTI-ACCOUNT ABUSE DETECTION FOR NEW USERS ---
-      let isBanned = false;
-      let banReason = null;
-      let matchedUser = null;
-
-      // 1. Device Fingerprint collision check (High accuracy)
-      if (deviceFp && deviceFp.length > 5) {
-        const dupFp = await db.query(
-          'SELECT telegram_id, username, first_name FROM users WHERE device_fingerprint = $1 AND telegram_id != $2 LIMIT 1',
-          [deviceFp, tgId]
-        );
-        if (dupFp.rows.length > 0) {
-          isBanned = true;
-          banReason = 'Multiple ID Abuse: Same Device Fingerprint detected';
-          matchedUser = dupFp.rows[0];
-          console.warn(`🚨 [Anti-Multi] Device FP match: UID ${tgId} matches existing UID ${matchedUser.telegram_id}`);
-        }
-      }
-
-      // 2. IP Collision & Self-Referral check (Excluding local loopbacks)
-      if (!isBanned && clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1' && !clientIp.startsWith('192.168.') && !clientIp.startsWith('10.')) {
-        if (effectiveReferrerId) {
-          const refRes = await db.query('SELECT telegram_id, username, last_ip, device_fingerprint FROM users WHERE telegram_id = $1', [effectiveReferrerId]);
-          if (refRes.rows.length > 0 && refRes.rows[0].last_ip === clientIp) {
-            isBanned = true;
-            banReason = 'Multiple ID Abuse: Self-referral from same IP';
-            matchedUser = refRes.rows[0];
-            console.warn(`🚨 [Anti-Multi] Self-referral IP match: UID ${tgId} created from referrer IP ${clientIp}`);
-          }
-        }
-      }
-
-      // If banned, cancel referral link and rewards
-      if (isBanned) {
-        effectiveReferrerId = null;
-      }
-
-      // Auto-create user in Neon Database
+      // Auto-create user in Neon Database with 0 balances
       const username = meta.username || `user_${tgId}`;
       const firstName = meta.firstName || 'Miner';
       const lastName = meta.lastName || `#${tgId}`;
@@ -180,8 +134,8 @@ class DBService {
           0.0000, 0.0000, 0.0000, 0.0000,
           0.0000, 0.0000, 0.0200, $5,
           $6, 'Standard Tier', 1.00, null, $7,
-          $8, $9, $10, $11, $12,
-          $13, 0, 0.0000
+          false, null, $8, $9, $10,
+          1, 0, 0.0000
         ) RETURNING *;
       `, [
         tgId,
@@ -191,31 +145,10 @@ class DBService {
         referralCode,
         effectiveReferrerId || null,
         avatar,
-        isBanned,
-        banReason,
         deviceFp || null,
         clientIp || null,
-        userAgent || null,
-        isBanned ? 0 : 1
+        userAgent || null
       ]);
-
-      // If multi-account was detected, notify Admin Bot in real time
-      if (isBanned) {
-        try {
-          const telegramBotService = require('./telegramBotService');
-          if (telegramBotService?.notifyMultiAccountAbuse) {
-            telegramBotService.notifyMultiAccountAbuse({
-              userId: tgId,
-              username: username,
-              matchedUserId: matchedUser?.telegram_id,
-              matchedUsername: matchedUser?.username,
-              deviceFp: deviceFp,
-              ip: clientIp,
-              reason: banReason
-            });
-          }
-        } catch (e) {}
-      }
 
       // Initialize default active miner for this user (Free Starter Mining: 0.02 USDT/day for 10 days = 0.20 USDT total)
       await db.query(`
@@ -242,7 +175,7 @@ class DBService {
       `, [tgId]);
 
       // If registered with clean referrer, record referral link, award +1 box, and notify referrer
-      if (effectiveReferrerId && effectiveReferrerId !== tgId && !isBanned) {
+      if (effectiveReferrerId && effectiveReferrerId !== tgId) {
         await this.addReferral(effectiveReferrerId, {
           referredId: tgId,
           username,
