@@ -245,6 +245,7 @@ const MiningModule = {
   },
 
   updateBalanceUI(newBalance, newDepositBalance) {
+    const partialState = {};
     if (newBalance !== undefined && newBalance !== null) {
       const balanceValEl = document.getElementById('total-balance-val');
       if (balanceValEl) {
@@ -254,12 +255,17 @@ const MiningModule = {
       if (availBalEl) {
         availBalEl.textContent = `${Number(newBalance).toFixed(4)} USDT`;
       }
+      partialState.balance = parseFloat(newBalance) || 0;
     }
     if (newDepositBalance !== undefined && newDepositBalance !== null) {
       const elNftBal = document.getElementById('nft-balance-val');
       if (elNftBal) {
         elNftBal.textContent = Number(newDepositBalance).toFixed(2);
       }
+      partialState.depositBalance = parseFloat(newDepositBalance) || 0;
+    }
+    if (window.appState && Object.keys(partialState).length > 0) {
+      window.appState.setState(partialState);
     }
   },
 

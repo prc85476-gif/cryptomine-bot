@@ -87,9 +87,12 @@ const App = {
       }
 
       if (userRes.success && userRes.data) {
+        const depBal = parseFloat(userRes.data.depositBalance !== undefined ? userRes.data.depositBalance : (userRes.data.nftBalance || 0)) || 0;
+        const mainBal = parseFloat(userRes.data.balance || 0) || 0;
         window.appState.setState({
           user: userRes.data,
-          balance: userRes.data.balance,
+          balance: mainBal,
+          depositBalance: depBal,
           miningRate: userRes.data.miningRate
         });
         this.updateUserUI(userRes.data);

@@ -282,10 +282,13 @@ const NFTModule = {
       return;
     }
 
-    const totalAvail = (state.depositBalance || 0) + (state.balance || 0);
+    const numPrice = parseFloat(price) || 0;
+    const depBal = parseFloat(state.depositBalance !== undefined ? state.depositBalance : (state.user?.depositBalance ?? state.user?.nftBalance ?? 0)) || 0;
+    const mainBal = parseFloat(state.balance !== undefined ? state.balance : (state.user?.balance ?? 0)) || 0;
+    const totalAvail = parseFloat((depBal + mainBal).toFixed(4));
 
-    if (totalAvail < price) {
-      window.ModalManager.showToast(`Insufficient NFT balance! You need ${price} USDT. Please Top up.`, 'error');
+    if (totalAvail < numPrice) {
+      window.ModalManager.showToast(`Insufficient NFT balance! You need ${numPrice} USDT (Available: ${totalAvail.toFixed(2)} USDT). Please Top up.`, 'error');
       window.WalletModule ? window.WalletModule.openDepositPage() : window.ModalManager.openModal('modal-deposit');
       return;
     }
@@ -294,11 +297,11 @@ const NFTModule = {
     const modal = document.getElementById('modal-buy-nft');
     if (modal) {
       document.getElementById('buy-nft-name').textContent = name;
-      document.getElementById('buy-nft-price').textContent = `${price} USDT`;
+      document.getElementById('buy-nft-price').textContent = `${numPrice} USDT`;
       document.getElementById('btn-confirm-buy-nft').dataset.nftId = id;
       window.ModalManager.openModal('modal-buy-nft');
     } else {
-      this.executeBuy(id, name, price);
+      this.executeBuy(id, name, numPrice);
     }
   },
 

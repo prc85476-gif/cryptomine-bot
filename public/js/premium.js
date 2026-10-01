@@ -55,9 +55,13 @@ const PremiumModule = {
   async activatePlan(planId, name, price) {
     window.TelegramService.hapticImpact('heavy');
     const state = window.appState.getState();
-    const totalAvail = (state.depositBalance || 0) + (state.balance || 0);
-    if (totalAvail < price) {
-      window.ModalManager.showToast(`Insufficient NFT balance! Need ${price} USDT. Please Top up.`, 'error');
+    const numPrice = parseFloat(price) || 0;
+    const depBal = parseFloat(state.depositBalance !== undefined ? state.depositBalance : (state.user?.depositBalance ?? state.user?.nftBalance ?? 0)) || 0;
+    const mainBal = parseFloat(state.balance !== undefined ? state.balance : (state.user?.balance ?? 0)) || 0;
+    const totalAvail = parseFloat((depBal + mainBal).toFixed(4));
+
+    if (totalAvail < numPrice) {
+      window.ModalManager.showToast(`Insufficient NFT balance! Need ${numPrice} USDT (Available: ${totalAvail.toFixed(2)} USDT). Please Top up.`, 'error');
       window.WalletModule ? window.WalletModule.openDepositPage() : window.ModalManager.openModal('modal-deposit');
       return;
     }
