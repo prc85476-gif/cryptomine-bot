@@ -6,8 +6,11 @@ const dbService = require('../services/dbService');
 exports.getBootstrapData = async (req, res) => {
   try {
     const tgId = Number(req.userId) || 9482103;
-    const [user, miner, hasFastMiner] = await Promise.all([
-      dbService.getUser(tgId, req.userMeta, req.clientInfo),
+    // 1. First ensure user row exists and load profile
+    const user = await dbService.getUser(tgId, req.userMeta, req.clientInfo);
+    
+    // 2. Concurrently load miner and fast miner status
+    const [miner, hasFastMiner] = await Promise.all([
       dbService.getActiveMiner(tgId),
       dbService.hasFastMiner(tgId)
     ]);

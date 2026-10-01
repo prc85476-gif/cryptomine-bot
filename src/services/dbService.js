@@ -438,6 +438,12 @@ class DBService {
 
       return this.formatMiner(newMiner.rows[0]);
     } catch (err) {
+      if (err.code === '23503') {
+        const tgId = Number(userId) || 9482103;
+        await this.getUser(tgId);
+        const retryRes = await db.query('SELECT * FROM active_miners WHERE user_id = $1', [tgId]);
+        if (retryRes.rows.length > 0) return this.formatMiner(retryRes.rows[0]);
+      }
       if (err.code === '23505') {
         const retryRes = await db.query('SELECT * FROM active_miners WHERE user_id = $1', [Number(userId) || 9482103]);
         if (retryRes.rows.length > 0) return this.formatMiner(retryRes.rows[0]);
