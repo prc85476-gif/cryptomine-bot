@@ -428,11 +428,17 @@ class DBService {
           0.0000, 0.0200, 0.0000, 0.0000, 0.2000,
           10, 0, '50 MH/s', 0.5000,
           2, 0.0500, '100 MH/s', '/assets/images/nft/miner-robot.png', $2
-        ) RETURNING *;
+        )
+        ON CONFLICT (user_id) DO UPDATE SET user_id = EXCLUDED.user_id
+        RETURNING *;
       `, [tgId, Date.now()]);
 
       return this.formatMiner(newMiner.rows[0]);
     } catch (err) {
+      if (err.code === '23505') {
+        const retryRes = await db.query('SELECT * FROM active_miners WHERE user_id = $1', [Number(userId) || 9482103]);
+        if (retryRes.rows.length > 0) return this.formatMiner(retryRes.rows[0]);
+      }
       console.error('DBService.getActiveMiner Error:', err);
       throw err;
     }
