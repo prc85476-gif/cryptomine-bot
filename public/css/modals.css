@@ -2153,4 +2153,125 @@
   color: #94A3B8;
 }
 
+/* Optional TXID Manual Instant Verification Box */
+.deposit-txhash-box {
+  margin-top: 10px;
+  background: rgba(37, 99, 235, 0.04);
+  border: 1px dashed rgba(37, 99, 235, 0.25);
+  border-radius: 12px;
+  padding: 10px 12px;
+  transition: all 0.2s ease;
+}
+
+[data-theme="dark"] .deposit-txhash-box {
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+.deposit-txhash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+
+.txhash-toggle-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2563EB;
+}
+
+[data-theme="dark"] .txhash-toggle-title {
+  color: #60A5FA;
+}
+
+.txhash-toggle-arrow {
+  font-size: 10px;
+  color: #2563EB;
+  transition: transform 0.2s ease;
+}
+
+[data-theme="dark"] .txhash-toggle-arrow {
+  color: #60A5FA;
+}
+
+.txhash-toggle-arrow.open {
+  transform: rotate(180deg);
+}
+
+.deposit-txhash-content {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.deposit-txhash-hint {
+  font-size: 11px;
+  color: #64748B;
+  margin: 0;
+  line-height: 1.35;
+}
+
+[data-theme="dark"] .deposit-txhash-hint {
+  color: #94A3B8;
+}
+
+.deposit-txhash-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.deposit-txhash-input {
+  flex: 1;
+  min-width: 0;
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  font-family: monospace;
+  color: #0F172A;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+[data-theme="dark"] .deposit-txhash-input {
+  background: #0B132B;
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #F8FAFC;
+}
+
+.deposit-txhash-input:focus {
+  border-color: #2563EB;
+}
+
+.btn-submit-txhash {
+  background: #2563EB;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.btn-submit-txhash:active {
+  transform: scale(0.96);
+}
+
+.btn-submit-txhash:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
 

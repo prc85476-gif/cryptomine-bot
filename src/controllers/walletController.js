@@ -106,6 +106,40 @@ exports.deposit = async (req, res) => {
   }
 };
 
+/**
+ * Verify and credit a deposit by manual Transaction Hash (TXID)
+ */
+exports.verifyDepositTx = async (req, res) => {
+  try {
+    const { txHash } = req.body;
+    if (!txHash) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid transaction hash (TXID)' });
+    }
+
+    const result = await depositWatcherService.verifyTxHash(req.userId, txHash);
+    if (!result || !result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result?.message || 'Transaction could not be verified on BSC blockchain.'
+      });
+    }
+
+    const user = await dbService.getUser(req.userId, req.userMeta);
+    return res.status(200).json({
+      success: true,
+      confirmed: true,
+      message: `Deposit of ${result.baseAmount} USDT successfully verified and credited!`,
+      newBalance: user.balance,
+      depositBalance: user.depositBalance,
+      totalDeposited: user.totalDeposited,
+      txHash: result.txHash
+    });
+  } catch (err) {
+    console.error('walletController.verifyDepositTx error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 exports.withdraw = async (req, res) => {
   try {
     const { amount, address, network, turnstileToken } = req.body;

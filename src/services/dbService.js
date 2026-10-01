@@ -1549,6 +1549,185 @@ class DBService {
       throw err;
     }
   }
+
+  /**
+   * Save or update active deposit intent in PostgreSQL
+   */
+  async saveDepositIntent(data) {
+    try {
+      const { userId, telegramId, username, baseAmount, exactAmount, network, depositAddress } = data;
+      // Mark older waiting intents for this user as Expired
+      await db.query(`
+        UPDATE deposit_intents
+        SET status = 'Expired'
+        WHERE user_id = $1 AND status = 'Waiting';
+      `, [Number(userId)]);
+
+      const res = await db.query(`
+        INSERT INTO deposit_intents (
+          user_id, telegram_id, username, base_amount, exact_amount,
+          network, deposit_address, status, created_at, expires_at
+        ) VALUES (
+          $1, $2, $3, $4, $5,
+          $6, $7, 'Waiting', NOW(), NOW() + INTERVAL '4 hours'
+        ) RETURNING *;
+      `, [
+        Number(userId),
+        telegramId ? Number(telegramId) : Number(userId),
+        username || 'Miner',
+        parseFloat(baseAmount),
+        parseFloat(exactAmount),
+        network || 'USDT BEP20',
+        depositAddress
+      ]);
+
+      return res.rows.length > 0 ? res.rows[0] : null;
+    } catch (err) {
+      console.error('DBService.saveDepositIntent Error:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Get active unexpired waiting deposit intent for user
+   */
+  async getWaitingDepositIntent(userId) {
+    try {
+      const res = await db.query(`
+        SELECT * FROM deposit_intents
+        WHERE user_id = $1 AND status = 'Waiting' AND expires_at > NOW()
+        ORDER BY created_at DESC
+        LIMIT 1;
+      `, [Number(userId)]);
+
+      return res.rows.length > 0 ? res.rows[0] : null;
+    } catch (err) {
+      console.error('DBService.getWaitingDepositIntent Error:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Find matching deposit intent by transferred amount (exact or base)
+   */
+  async findMatchingDepositIntent(transferredAmount, preferredUserId = null) {
+    try {
+      const numAmt = parseFloat(transferredAmount);
+
+      // If preferred user provided, check their waiting intent first
+      if (preferredUserId) {
+        const userRes = await db.query(`
+          SELECT * FROM deposit_intents
+          WHERE user_id = $1 AND status = 'Waiting' AND expires_at > NOW()
+            AND (
+              exact_amount = $2
+              OR base_amount = $2
+              OR ABS(exact_amount - $2) <= 0.05
+              OR ABS(base_amount - $2) <= 0.05
+            )
+          ORDER BY created_at DESC
+          LIMIT 1;
+        `, [Number(preferredUserId), numAmt]);
+
+        if (userRes.rows.length > 0) return userRes.rows[0];
+      }
+
+      // 1. Check exact_amount match across all waiting intents
+      let res = await db.query(`
+        SELECT * FROM deposit_intents
+        WHERE status = 'Waiting' AND expires_at > NOW()
+          AND (exact_amount = $1 OR ABS(exact_amount - $1) <= 0.0005)
+        ORDER BY created_at DESC
+        LIMIT 1;
+      `, [numAmt]);
+
+      if (res.rows.length > 0) return res.rows[0];
+
+      // 2. Check base_amount match (e.g. user selected 5 USDT and transferred 5.00 USDT)
+      res = await db.query(`
+        SELECT * FROM deposit_intents
+        WHERE status = 'Waiting' AND expires_at > NOW()
+          AND (base_amount = $1 OR ABS(base_amount - $1) <= 0.05)
+        ORDER BY created_at DESC
+        LIMIT 1;
+      `, [numAmt]);
+
+      return res.rows.length > 0 ? res.rows[0] : null;
+    } catch (err) {
+      console.error('DBService.findMatchingDepositIntent Error:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Mark deposit intent as Confirmed
+   */
+  async markDepositIntentConfirmed(intentId, txHash) {
+    try {
+      const res = await db.query(`
+        UPDATE deposit_intents
+        SET status = 'Confirmed', tx_hash = $1
+        WHERE id = $2
+        RETURNING *;
+      `, [txHash, intentId]);
+
+      return res.rows.length > 0 ? res.rows[0] : null;
+    } catch (err) {
+      console.error('DBService.markDepositIntentConfirmed Error:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Check if on-chain transaction hash has already been processed
+   */
+  async isDepositTxProcessed(txHash) {
+    try {
+      if (!txHash) return false;
+      const cleanHash = txHash.trim().toLowerCase();
+      const res = await db.query(`
+        SELECT id FROM processed_deposits
+        WHERE LOWER(tx_hash) = $1
+        LIMIT 1;
+      `, [cleanHash]);
+
+      return res.rows.length > 0;
+    } catch (err) {
+      console.error('DBService.isDepositTxProcessed Error:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Record processed deposit into ledger
+   */
+  async recordProcessedDeposit(data) {
+    try {
+      const { txHash, userId, amount, senderAddress, receiverAddress, network, blockNumber } = data;
+      const res = await db.query(`
+        INSERT INTO processed_deposits (
+          tx_hash, user_id, amount, sender_address, receiver_address, network, block_number, created_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, NOW()
+        )
+        ON CONFLICT (tx_hash) DO NOTHING
+        RETURNING *;
+      `, [
+        txHash.trim().toLowerCase(),
+        Number(userId) || null,
+        parseFloat(amount),
+        senderAddress || null,
+        receiverAddress || null,
+        network || 'USDT BEP20',
+        blockNumber ? Number(blockNumber) : null
+      ]);
+
+      return res.rows.length > 0 ? res.rows[0] : null;
+    } catch (err) {
+      console.error('DBService.recordProcessedDeposit Error:', err);
+      return null;
+    }
+  }
 }
 
 module.exports = new DBService();

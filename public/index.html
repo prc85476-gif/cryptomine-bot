@@ -1149,6 +1149,23 @@
               <span>LIVE</span>
             </div>
           </div>
+
+          <!-- 5. Instant Verification via TXID (Optional Fallback) -->
+          <div class="deposit-txhash-box" id="deposit-txhash-box">
+            <div class="deposit-txhash-header" id="deposit-txhash-toggle">
+              <span class="txhash-toggle-title">⚡ Paid flat amount or have TXID? Click here</span>
+              <span class="txhash-toggle-arrow" id="deposit-txhash-arrow">▼</span>
+            </div>
+            <div class="deposit-txhash-content" id="deposit-txhash-content" style="display: none;">
+              <p class="deposit-txhash-hint">Paste your Transaction Hash (TxID) from Binance / Trust Wallet for instant 1-second auto-credit:</p>
+              <div class="deposit-txhash-input-row">
+                <input type="text" id="deposit-txhash-input" class="deposit-txhash-input" placeholder="0x..." autocomplete="off" spellcheck="false" />
+                <button type="button" id="btn-submit-txhash" class="btn-submit-txhash">
+                  <span id="btn-submit-txhash-text">Verify</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Bottom Step 2 Action Button: Verify Payment -->

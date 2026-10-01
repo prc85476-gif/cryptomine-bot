@@ -343,7 +343,12 @@ const WalletModule = {
           } else {
             window.TelegramService.hapticNotification('warning');
             const amtStr = this.currentExactAmount ? `${this.currentExactAmount} USDT` : `${this.currentDepositAmount} USDT`;
-            window.ModalManager.showToast(`🔍 Scanning BSC... Transfer not found yet. Please make sure exact ${amtStr} was sent to the address.`, 'info');
+            window.ModalManager.showToast(`🔍 Scanning BSC... If paid flat ${amtStr}, paste TXID below for instant confirmation!`, 'info');
+            // Auto open the TXID box to help user
+            const txContent = document.getElementById('deposit-txhash-content');
+            const txArrow = document.getElementById('deposit-txhash-arrow');
+            if (txContent) txContent.style.display = 'flex';
+            if (txArrow) txArrow.classList.add('open');
           }
         } catch (err) {
           console.warn('Manual verify status check error:', err);
@@ -358,6 +363,61 @@ const WalletModule = {
         }
       });
     }
+
+    // Toggle optional TXID input box
+    const txToggle = document.getElementById('deposit-txhash-toggle');
+    const txContent = document.getElementById('deposit-txhash-content');
+    const txArrow = document.getElementById('deposit-txhash-arrow');
+    if (txToggle && txContent) {
+      txToggle.addEventListener('click', () => {
+        const isHidden = txContent.style.display === 'none' || !txContent.style.display;
+        txContent.style.display = isHidden ? 'flex' : 'none';
+        if (txArrow) {
+          if (isHidden) txArrow.classList.add('open');
+          else txArrow.classList.remove('open');
+        }
+      });
+    }
+
+    // Submit Manual TXID for Instant On-Chain Credit
+    const submitTxBtn = document.getElementById('btn-submit-txhash');
+    const txInput = document.getElementById('deposit-txhash-input');
+    if (submitTxBtn && txInput) {
+      submitTxBtn.addEventListener('click', async () => {
+        const hash = txInput.value.trim();
+        if (!hash || hash.length < 10) {
+          window.TelegramService.hapticNotification('error');
+          window.ModalManager.showToast('Please enter a valid BSC Transaction Hash (TxID)', 'error');
+          txInput.focus();
+          return;
+        }
+
+        window.TelegramService.hapticImpact('medium');
+        submitTxBtn.disabled = true;
+        const btnText = document.getElementById('btn-submit-txhash-text');
+        if (btnText) btnText.innerHTML = '<span class="btn-spinner-icon"></span> Verifying...';
+
+        try {
+          const res = await window.ApiService.verifyDepositTx(hash);
+          if (res && res.confirmed === true) {
+            window.TelegramService.hapticNotification('success');
+            if (btnText) btnText.textContent = '✅ Verified!';
+            this.handleDepositConfirmed(res);
+          } else {
+            window.TelegramService.hapticNotification('warning');
+            window.ModalManager.showToast(res.message || 'Transaction could not be verified. Please check TxID or wait a moment.', 'warning');
+            if (btnText) btnText.textContent = 'Verify';
+            submitTxBtn.disabled = false;
+          }
+        } catch (err) {
+          console.error('Verify TX error:', err);
+          window.TelegramService.hapticNotification('error');
+          window.ModalManager.showToast(err.message || 'Error verifying transaction hash', 'error');
+          if (btnText) btnText.textContent = 'Verify';
+          submitTxBtn.disabled = false;
+        }
+      });
+    }
   },
 
   async goToDepositStep2() {
@@ -368,6 +428,18 @@ const WalletModule = {
     const proceedTopupBtn = document.getElementById('btn-proceed-topup');
 
     const amountNum = parseFloat(this.currentDepositAmount) || 3;
+
+    // Reset TXID box state
+    const txContent = document.getElementById('deposit-txhash-content');
+    const txArrow = document.getElementById('deposit-txhash-arrow');
+    const txInput = document.getElementById('deposit-txhash-input');
+    const submitTxBtn = document.getElementById('btn-submit-txhash');
+    const btnText = document.getElementById('btn-submit-txhash-text');
+    if (txContent) txContent.style.display = 'none';
+    if (txArrow) txArrow.classList.remove('open');
+    if (txInput) txInput.value = '';
+    if (submitTxBtn) submitTxBtn.disabled = false;
+    if (btnText) btnText.textContent = 'Verify';
 
     // Reset live status card and verify button
     const liveCard = document.getElementById('deposit-live-status-card');

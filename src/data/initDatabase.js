@@ -155,6 +155,42 @@ async function initDatabase() {
       );
     `);
 
+    // 7. Persistent Deposit Intents Table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS deposit_intents (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        telegram_id BIGINT,
+        username VARCHAR(100),
+        base_amount NUMERIC(18, 4) NOT NULL,
+        exact_amount NUMERIC(18, 4) NOT NULL,
+        network VARCHAR(50) DEFAULT 'USDT BEP20',
+        deposit_address VARCHAR(255) NOT NULL,
+        status VARCHAR(50) DEFAULT 'Waiting',
+        tx_hash VARCHAR(255) DEFAULT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        expires_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '4 hours')
+      );
+      CREATE INDEX IF NOT EXISTS idx_deposit_intents_user ON deposit_intents(user_id, status);
+      CREATE INDEX IF NOT EXISTS idx_deposit_intents_exact ON deposit_intents(exact_amount, status);
+    `);
+
+    // 8. Processed On-Chain Deposits Ledger (Prevents double credit & supports multiple deposits)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS processed_deposits (
+        id BIGSERIAL PRIMARY KEY,
+        tx_hash VARCHAR(255) UNIQUE NOT NULL,
+        user_id BIGINT,
+        amount NUMERIC(18, 4) NOT NULL,
+        sender_address VARCHAR(255),
+        receiver_address VARCHAR(255),
+        network VARCHAR(50) DEFAULT 'USDT BEP20',
+        block_number BIGINT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_processed_deposits_tx ON processed_deposits(tx_hash);
+    `);
+
     console.log('✅ Neon PostgreSQL Database Initialized Successfully with 0 Balances!');
     return true;
   } catch (err) {
