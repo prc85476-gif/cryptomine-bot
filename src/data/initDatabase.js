@@ -51,6 +51,7 @@ async function initDatabase() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS gift_boxes_available INT DEFAULT 1;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS gift_boxes_opened INT DEFAULT 0;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_speed_bonus NUMERIC(18, 4) DEFAULT 0.0000;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_withdraw_limit INT DEFAULT NULL;
       ALTER TABLE users ALTER COLUMN balance SET DEFAULT 0.0000;
       ALTER TABLE users ALTER COLUMN deposit_balance SET DEFAULT 0.0000;
       ALTER TABLE users ALTER COLUMN ton_balance SET DEFAULT 0.0000;

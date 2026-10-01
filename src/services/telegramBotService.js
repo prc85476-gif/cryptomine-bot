@@ -552,6 +552,65 @@ class TelegramBotService {
     this.bot.command('deductbalance', handleDeductBalanceCommand);
     this.bot.command('deductbal', handleDeductBalanceCommand);
 
+    // /setlimit command: /setlimit <UID> <count or default>
+    const handleSetLimitCommand = async (ctx) => {
+      try {
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!this.isAuthorizedAdmin(ctx.from)) return;
+        const text = ctx.message?.text || '';
+        const parts = text.trim().split(/\s+/);
+        const targetId = parts[1];
+        const limitArg = parts[2];
+
+        if (!targetId || isNaN(targetId) || !limitArg) {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `⚠️ <b>Usage:</b> <code>/setlimit &lt;UID&gt; &lt;limit_count or default&gt;</code>\nExamples:\n• <code>/setlimit 9482103 3</code> (sets daily limit to 3 times/day)\n• <code>/setlimit 9482103 5</code> (sets daily limit to 5 times/day)\n• <code>/setlimit 9482103 default</code> (resets to standard system default)`,
+            parse_mode: 'HTML'
+          });
+          return;
+        }
+
+        const isReset = limitArg.toLowerCase() === 'default' || limitArg.toLowerCase() === 'reset';
+        const numLimit = isReset ? null : parseInt(limitArg, 10);
+
+        if (!isReset && (isNaN(numLimit) || numLimit < 0)) {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `❌ <b>Invalid Limit!</b> Please enter a valid integer count (e.g. <code>3</code>, <code>5</code>, <code>10</code>) or <code>default</code>.`,
+            parse_mode: 'HTML'
+          });
+          return;
+        }
+
+        const updated = await dbService.setUserDailyWithdrawLimit(targetId, numLimit);
+        if (!updated) {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `⚠️ User with ID <code>${targetId}</code> not found in database.`,
+            parse_mode: 'HTML'
+          });
+          return;
+        }
+
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          text: isReset
+            ? `✅ <b>WITHDRAWAL LIMIT RESET!</b>\nDaily limit for @${this.escapeHtml(updated.username)} (UID: <code>${targetId}</code>) has been reset to system default.`
+            : `✅ <b>DAILY WITHDRAWAL LIMIT UPDATED!</b>\nTarget User: @${this.escapeHtml(updated.username)} (UID: <code>${targetId}</code>)\n⏱️ New Daily Limit: <b>${numLimit} times/day</b>`,
+          parse_mode: 'HTML'
+        });
+
+        await this.sendUserProfileCard(chatId, targetId);
+      } catch (err) {
+        console.error('Error handling /setlimit:', err.message);
+      }
+    };
+
+    this.bot.command('setlimit', handleSetLimitCommand);
+    this.bot.command('limit', handleSetLimitCommand);
+    this.bot.command('withdrawlimit', handleSetLimitCommand);
+
     // /cancel command
     this.bot.command('cancel', async (ctx) => {
       const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
@@ -592,10 +651,11 @@ class TelegramBotService {
 3. ➕ <b>/addbalance &lt;UID&gt; &lt;amount&gt;:</b> Add Withdrawable USDT balance directly to user account.
 4. 🛍️ <b>/adddeposit &lt;UID&gt; &lt;amount&gt;:</b> Add Deposit / NFT Purchase USDT balance to user.
 5. ➖ <b>/deductbalance &lt;UID&gt; &lt;amount&gt;:</b> Deduct Withdrawable USDT balance from user.
-6. 🚫 <b>/ban &lt;UID&gt; & /unban &lt;UID&gt;:</b> Block or unblock any user account.
-7. 📥 <b>Withdrawal Approval:</b> When a user requests withdrawal, you get an instant card with <b>[Approve & Pay]</b> and <b>[Reject]</b>.
-8. 💸 <b>On-Chain Auto Payout:</b> Instant BEP20 USDT payout, auto-broadcasted to @cryptomintwithdraw.
-9. 🚨 <b>Risk Alerts:</b> Automated notification when Master Wallet USDT balance drops <= $5 or when BNB gas is low/exhausted.`;
+6. ⏱️ <b>/setlimit &lt;UID&gt; &lt;count or default&gt;:</b> Set custom daily withdrawal count limit (e.g. 1, 3, 5, 10 times/day).
+7. 🚫 <b>/ban &lt;UID&gt; & /unban &lt;UID&gt;:</b> Block or unblock any user account.
+8. 📥 <b>Withdrawal Approval:</b> When a user requests withdrawal, you get an instant card with <b>[Approve & Pay]</b> and <b>[Reject]</b>.
+9. 💸 <b>On-Chain Auto Payout:</b> Instant BEP20 USDT payout, auto-broadcasted to @cryptomintwithdraw.
+10. 🚨 <b>Risk Alerts:</b> Automated notification when Master Wallet USDT balance drops <= $5 or when BNB gas is low/exhausted.`;
 
         await this.bot.api.sendMessage({
           chat_id: chatId,
@@ -753,6 +813,34 @@ class TelegramBotService {
             await this.sendUserProfileCard(chatId, targetId);
             return;
           }
+
+          if (session.state === 'AWAITING_CUSTOM_WITHDRAW_LIMIT') {
+            const targetId = session.targetUserId;
+            this.adminSessions.delete(chatId);
+            const isReset = text.toLowerCase() === 'default' || text.toLowerCase() === 'reset';
+            const numLimit = isReset ? null : parseInt(text, 10);
+
+            if (!isReset && (isNaN(numLimit) || numLimit < 0)) {
+              await this.bot.api.sendMessage({
+                chat_id: chatId,
+                text: `❌ <b>Invalid Limit!</b> Please enter a valid positive integer count (e.g. <code>3</code>, <code>5</code>, <code>10</code>) or <code>default</code>.`,
+                parse_mode: 'HTML'
+              });
+              return;
+            }
+
+            const updated = await dbService.setUserDailyWithdrawLimit(targetId, numLimit);
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: isReset
+                ? `✅ <b>WITHDRAWAL LIMIT RESET:</b> Daily limit for @${this.escapeHtml(updated?.username || targetId)} has been reset to system default.`
+                : `✅ <b>DAILY LIMIT SET:</b> Set to <b>${numLimit} times/day</b> for @${this.escapeHtml(updated?.username || targetId)} (UID: <code>${targetId}</code>)!`,
+              parse_mode: 'HTML'
+            });
+
+            await this.sendUserProfileCard(chatId, targetId);
+            return;
+          }
         }
 
         // If no active session and text is not a command starting with /, check if it's a numeric UID or @username
@@ -874,6 +962,57 @@ class TelegramBotService {
         if (data.startsWith('user_refs:')) {
           const targetId = data.split(':')[1];
           await this.sendUserReferrals(chatId, targetId, messageId);
+          return;
+        }
+
+        if (data.startsWith('user_limit_menu:')) {
+          const targetId = data.split(':')[1];
+          await this.sendWithdrawLimitMenu(chatId, targetId, messageId);
+          return;
+        }
+
+        if (data.startsWith('user_prompt_custom_limit:')) {
+          const targetId = data.split(':')[1];
+          this.adminSessions.set(chatId, { state: 'AWAITING_CUSTOM_WITHDRAW_LIMIT', targetUserId: targetId });
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `✏️ <b>Enter Custom Daily Withdrawal Limit:</b>\n━━━━━━━━━━━━━━━━━━━━\nTarget UID: <code>${targetId}</code>\n\n<i>Type a number (e.g. <code>3</code>, <code>5</code>, <code>10</code>) or type <code>default</code> to reset:</i>`,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔙 Back to User Profile', callback_data: `user_view:${targetId}` }]
+              ]
+            }
+          });
+          return;
+        }
+
+        if (data.startsWith('user_exec_limit:')) {
+          const [, targetId, limitStr] = data.split(':');
+          const numLimit = parseInt(limitStr, 10);
+          if (targetId && !isNaN(numLimit) && numLimit >= 0) {
+            const updated = await dbService.setUserDailyWithdrawLimit(targetId, numLimit);
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: `✅ <b>Daily Limit Set to ${numLimit} times/day</b> for @${this.escapeHtml(updated?.username || targetId)}!`,
+              parse_mode: 'HTML'
+            });
+            await this.sendUserProfileCard(chatId, targetId, messageId);
+          }
+          return;
+        }
+
+        if (data.startsWith('user_reset_limit:')) {
+          const targetId = data.split(':')[1];
+          if (targetId) {
+            const updated = await dbService.setUserDailyWithdrawLimit(targetId, null);
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: `✅ <b>Daily Limit Reset to Default</b> for @${this.escapeHtml(updated?.username || targetId)}!`,
+              parse_mode: 'HTML'
+            });
+            await this.sendUserProfileCard(chatId, targetId, messageId);
+          }
           return;
         }
 
@@ -1297,7 +1436,7 @@ class TelegramBotService {
         return;
       }
 
-      const { user, miner, referralStats, purchasedNFTs, referrerUser, createdAt } = data;
+      const { user, miner, referralStats, purchasedNFTs, referrerUser, createdAt, effectiveDailyLimit, defaultLimit, todayWithdrawalCount, hasCustomLimit } = data;
       const totalUserFunds = parseFloat((user.balance + user.depositBalance).toFixed(4));
       const isBanned = user.isBanned === true;
 
@@ -1311,6 +1450,10 @@ class TelegramBotService {
       } else if (user.referrerId) {
         referrerDisplay = `UID: <code>${user.referrerId}</code>`;
       }
+
+      const limitNote = hasCustomLimit
+        ? `<code>${effectiveDailyLimit} times/day</code> [⚙️ <b>Custom Admin Override</b>]`
+        : `<code>${effectiveDailyLimit} times/day</code> [⚡ <b>Default (${defaultLimit})</b>]`;
 
       const cardText = `👤 <b>USER DETAILS & AUDIT CARD</b>
 ━━━━━━━━━━━━━━━━━━━━
@@ -1327,6 +1470,10 @@ class TelegramBotService {
 • 📈 <b>Total Deposited:</b> <code>+${user.totalDeposited.toFixed(2)} USDT</code>
 • 📤 <b>Total Withdrawn:</b> <code>${user.totalWithdrawn.toFixed(4)} USDT</code>
 • 🎁 <b>Lifetime Earned:</b> <code>${user.totalEarned.toFixed(4)} USDT</code>
+
+📤 <b>WITHDRAWAL LIMITS & USAGE:</b>
+• ⏱️ <b>Daily Limit:</b> ${limitNote}
+• ⏳ <b>Used Today:</b> <b>${todayWithdrawalCount} / ${effectiveDailyLimit} withdrawals</b>
 
 ⛏️ <b>MINER & DAILY MINING:</b>
 • 🤖 <b>Current Miner:</b> ${this.escapeHtml(miner.name)} (Lv. ${miner.level} - ${miner.rarity})
@@ -1357,17 +1504,18 @@ class TelegramBotService {
           ],
           [
             { text: '➖ Deduct Balance', callback_data: `user_deduct_menu:${user.telegramId}` },
-            { text: '📋 View Transactions', callback_data: `user_txs:${user.telegramId}` }
+            { text: '⏱️ Set Withdraw Limit', callback_data: `user_limit_menu:${user.telegramId}` }
           ],
           [
-            { text: '👥 View Referrals', callback_data: `user_refs:${user.telegramId}` },
-            { text: isBanned ? '✅ Unban Account' : '🚫 Ban Account', callback_data: isBanned ? `unban:${user.telegramId}` : `ban:${user.telegramId}` }
+            { text: '📋 View Transactions', callback_data: `user_txs:${user.telegramId}` },
+            { text: '👥 View Referrals', callback_data: `user_refs:${user.telegramId}` }
           ],
           [
-            { text: '🔄 Refresh Profile', callback_data: `user_refresh:${user.telegramId}` },
-            { text: '🔍 Search Another', callback_data: 'cmd_search_user' }
+            { text: isBanned ? '✅ Unban Account' : '🚫 Ban Account', callback_data: isBanned ? `unban:${user.telegramId}` : `ban:${user.telegramId}` },
+            { text: '🔄 Refresh Profile', callback_data: `user_refresh:${user.telegramId}` }
           ],
           [
+            { text: '🔍 Search Another', callback_data: 'cmd_search_user' },
             { text: '🏠 Admin Dashboard', callback_data: 'cmd_dashboard' }
           ]
         ]
@@ -1401,6 +1549,79 @@ class TelegramBotService {
       }
     } catch (err) {
       console.error('Error in sendUserProfileCard:', err);
+    }
+  }
+
+  /**
+   * Render Set Daily Withdrawal Limit Menu with Preset Buttons and Custom Options
+   */
+  async sendWithdrawLimitMenu(chatId, userId, messageId = null) {
+    if (!this.bot) return;
+
+    try {
+      const data = await dbService.getUserFullProfile(userId);
+      if (!data || !data.user) return;
+
+      const { user, effectiveDailyLimit, defaultLimit, todayWithdrawalCount, hasCustomLimit } = data;
+
+      const statusText = hasCustomLimit
+        ? `⚙️ <b>Custom Admin Override:</b> <code>${effectiveDailyLimit} times/day</code>`
+        : `⚡ <b>Standard System Default:</b> <code>${defaultLimit} times/day</code>`;
+
+      const msgText = `⏱️ <b>SET DAILY WITHDRAWAL LIMIT</b>
+━━━━━━━━━━━━━━━━━━━━
+👤 <b>Target User:</b> @${this.escapeHtml(user.username)} (UID: <code>${userId}</code>)
+📊 <b>Current Daily Limit:</b> <b>${effectiveDailyLimit} times/day</b>
+${statusText}
+⏳ <b>Withdrawals Used Today:</b> <b>${todayWithdrawalCount} / ${effectiveDailyLimit}</b>
+━━━━━━━━━━━━━━━━━━━━
+👇 <i>Choose a quick daily limit preset below, or enter a custom limit:</i>`;
+
+      const keyboardRows = [
+        [
+          { text: '1 Time/day', callback_data: `user_exec_limit:${userId}:1` },
+          { text: '2 Times (Default)', callback_data: `user_exec_limit:${userId}:2` },
+          { text: '3 Times/day', callback_data: `user_exec_limit:${userId}:3` }
+        ],
+        [
+          { text: '5 Times/day', callback_data: `user_exec_limit:${userId}:5` },
+          { text: '10 Times/day', callback_data: `user_exec_limit:${userId}:10` },
+          { text: '20 Times/day', callback_data: `user_exec_limit:${userId}:20` }
+        ],
+        [
+          { text: '🔄 Reset to Default (2/5)', callback_data: `user_reset_limit:${userId}` },
+          { text: '✏️ Custom Limit', callback_data: `user_prompt_custom_limit:${userId}` }
+        ],
+        [
+          { text: '🔙 Back to User Profile', callback_data: `user_view:${userId}` }
+        ]
+      ];
+
+      if (messageId) {
+        await this.bot.api.editMessageText({
+          chat_id: chatId,
+          message_id: messageId,
+          text: msgText,
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: keyboardRows }
+        }).catch(async () => {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: msgText,
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: keyboardRows }
+          });
+        });
+      } else {
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          text: msgText,
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: keyboardRows }
+        });
+      }
+    } catch (err) {
+      console.error('Error in sendWithdrawLimitMenu:', err);
     }
   }
 

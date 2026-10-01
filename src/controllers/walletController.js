@@ -163,13 +163,18 @@ exports.withdraw = async (req, res) => {
       }
     }
 
-    const dailyLimit = isFastMiner ? 5 : 2;
+    const defaultLimit = isFastMiner ? 5 : 2;
+    const dailyLimit = (user.dailyWithdrawLimit !== null && user.dailyWithdrawLimit !== undefined && user.dailyWithdrawLimit >= 0)
+      ? user.dailyWithdrawLimit
+      : defaultLimit;
     const todayCount = await dbService.getDailyWithdrawalCount(req.userId);
 
     if (todayCount >= dailyLimit) {
-      const limitMsg = isFastMiner
-        ? `Daily withdrawal limit reached (${dailyLimit}/${dailyLimit} times). You have used all 5 daily withdrawals for today.`
-        : `Daily limit reached (${dailyLimit}/${dailyLimit} times). Purchase a fast mining NFT to increase your daily withdrawal limit to 5 times!`;
+      const limitMsg = (user.dailyWithdrawLimit !== null && user.dailyWithdrawLimit !== undefined)
+        ? `Daily withdrawal limit reached (${todayCount}/${dailyLimit} times). You have used all daily withdrawals allocated for today.`
+        : (isFastMiner
+            ? `Daily withdrawal limit reached (${dailyLimit}/${dailyLimit} times). You have used all 5 daily withdrawals for today.`
+            : `Daily limit reached (${dailyLimit}/${dailyLimit} times). Purchase a fast mining NFT to increase your daily withdrawal limit to 5 times!`);
 
       return res.status(400).json({
         success: false,

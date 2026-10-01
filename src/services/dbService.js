@@ -228,6 +228,7 @@ class DBService {
       giftBoxesAvailable: parseInt(row.gift_boxes_available !== undefined && row.gift_boxes_available !== null ? row.gift_boxes_available : 0),
       giftBoxesOpened: parseInt(row.gift_boxes_opened || 0),
       dailySpeedBonus: parseFloat(row.daily_speed_bonus || 0.0000),
+      dailyWithdrawLimit: (row.daily_withdraw_limit !== null && row.daily_withdraw_limit !== undefined) ? parseInt(row.daily_withdraw_limit, 10) : null,
       referralCode: row.referral_code || 'CRYPTO-9482',
       referrerId: row.referrer_id,
       vipTier: row.vip_tier || 'Standard Tier',
@@ -325,7 +326,9 @@ class DBService {
         userAgent: 'user_agent',
         giftBoxesAvailable: 'gift_boxes_available',
         giftBoxesOpened: 'gift_boxes_opened',
-        dailySpeedBonus: 'daily_speed_bonus'
+        dailySpeedBonus: 'daily_speed_bonus',
+        dailyWithdrawLimit: 'daily_withdraw_limit',
+        daily_withdraw_limit: 'daily_withdraw_limit'
       };
 
       const setClauses = [];
@@ -1378,6 +1381,19 @@ class DBService {
         if (uRow.rows.length > 0) createdAt = uRow.rows[0].created_at;
       } catch (e) {}
 
+      // Calculate withdrawal limits and count for today
+      let todayWithdrawalCount = 0;
+      let isFast = false;
+      try {
+        todayWithdrawalCount = await this.getDailyWithdrawalCount(tgId);
+        isFast = await this.hasFastMiner(tgId);
+      } catch (e) {}
+
+      const defaultLimit = isFast ? 5 : 2;
+      const effectiveDailyLimit = (user.dailyWithdrawLimit !== null && user.dailyWithdrawLimit !== undefined && user.dailyWithdrawLimit >= 0)
+        ? user.dailyWithdrawLimit
+        : defaultLimit;
+
       return {
         user,
         miner: miner || { name: 'Free Starter Miner', level: 1, powerHashrate: '50 MH/s', dailyReward: 0.02 },
@@ -1386,10 +1402,43 @@ class DBService {
         purchasedNFTs,
         streaks,
         referrerUser,
-        createdAt
+        createdAt,
+        effectiveDailyLimit,
+        defaultLimit,
+        todayWithdrawalCount,
+        hasCustomLimit: user.dailyWithdrawLimit !== null && user.dailyWithdrawLimit !== undefined
       };
     } catch (err) {
       console.error('DBService.getUserFullProfile Error:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Set or reset Custom Daily Withdrawal Limit for user
+   */
+  async setUserDailyWithdrawLimit(userId, limit = null) {
+    try {
+      const tgId = Number(userId);
+      let targetLimit = null;
+      if (limit !== null && limit !== undefined && limit !== 'default' && limit !== 'reset') {
+        const parsed = parseInt(limit, 10);
+        if (!isNaN(parsed) && parsed >= 0) {
+          targetLimit = parsed;
+        }
+      }
+
+      const res = await db.query(`
+        UPDATE users
+        SET daily_withdraw_limit = $1,
+            updated_at = NOW()
+        WHERE telegram_id = $2
+        RETURNING *;
+      `, [targetLimit, tgId]);
+
+      return res.rows.length > 0 ? this.formatUser(res.rows[0]) : null;
+    } catch (err) {
+      console.error('DBService.setUserDailyWithdrawLimit Error:', err);
       throw err;
     }
   }
