@@ -57,13 +57,16 @@ class TelegramBotService {
         console.log('🔄 [Admin Bot] Starting Telegram getUpdates polling...');
         await this.bot.startPolling(undefined, {
           dropPendingUpdates: false,
-          allowedUpdates: ['message', 'callback_query']
+          allowedUpdates: ['message', 'callback_query'],
+          retry: true,
+          retryDelayMs: 3000
         });
       } catch (err) {
-        console.warn('⚠️ [Admin Bot] Polling connection notice:', err.message || err, '— Reconnecting in 3s...');
+        const isConflict = String(err.message || '').includes('409');
+        const delayMs = isConflict ? 10000 : 4000;
+        console.warn(`⚠️ [Admin Bot] Polling notice: ${err.message || err} — Reconnecting in ${delayMs / 1000}s...`);
+        await new Promise(r => setTimeout(r, delayMs));
       }
-      // Auto-reconnect delay
-      await new Promise(r => setTimeout(r, 3000));
     }
   }
 
