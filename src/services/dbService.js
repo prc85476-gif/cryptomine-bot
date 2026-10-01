@@ -281,13 +281,13 @@ class DBService {
   }
 
   /**
-   * Check if User is Banned (Multi-accounts explicitly enabled for all users)
+   * Check if User is Banned in database
    */
   async isUserBanned(telegramId) {
     try {
       const tgId = Number(telegramId);
       const res = await db.query('SELECT is_banned FROM users WHERE telegram_id = $1', [tgId]);
-      return false; // Multi-accounts enabled: never block users
+      return res.rows.length > 0 ? res.rows[0].is_banned === true : false;
     } catch (err) {
       return false;
     }
@@ -1288,6 +1288,210 @@ class DBService {
         totalPurchasedPlans: 0,
         totalDailyMiningRate: '0.0000'
       };
+    }
+  }
+
+  /**
+   * Search user by Telegram ID, Username (with or without @), or Referral Code
+   */
+  async searchUser(query) {
+    if (!query) return null;
+    const cleanStr = String(query).trim();
+    if (!cleanStr) return null;
+
+    const numericId = parseInt(cleanStr.replace(/[^0-9]/g, ''), 10) || 0;
+    const directNum = (!isNaN(cleanStr) && Number(cleanStr) > 0) ? Number(cleanStr) : 0;
+    const cleanUsername = cleanStr.replace(/^@/, '');
+    const cleanRef = cleanStr.replace(/^(REF|ref|CRYPTO|crypto)-/i, '');
+
+    try {
+      const res = await db.query(`
+        SELECT * FROM users
+        WHERE (telegram_id > 0 AND (telegram_id = $1 OR telegram_id = $2))
+           OR LOWER(username) = LOWER($3)
+           OR LOWER(username) = LOWER($4)
+           OR UPPER(referral_code) = UPPER($5)
+           OR UPPER(referral_code) = UPPER($6)
+           OR UPPER(referral_code) = UPPER($7)
+        LIMIT 1;
+      `, [
+        directNum,
+        numericId,
+        cleanUsername,
+        `@${cleanUsername}`,
+        cleanStr,
+        `REF-${cleanRef}`,
+        `CRYPTO-${cleanRef}`
+      ]);
+
+      if (res.rows.length > 0) {
+        return this.formatUser(res.rows[0]);
+      }
+      return null;
+    } catch (err) {
+      console.error('DBService.searchUser Error:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Get detailed profile data for Admin User Audit card
+   */
+  async getUserFullProfile(userId) {
+    try {
+      const tgId = Number(userId);
+      const user = await this.getUser(tgId);
+      if (!user) return null;
+
+      const [miner, referralStats, recentTxs, purchasedNFTs, streaks] = await Promise.all([
+        this.getActiveMiner(tgId).catch(() => null),
+        this.getReferrals(tgId).catch(() => ({ invitedCount: 0, totalEarnings: 0, referralsList: [] })),
+        this.getTransactions(tgId, 10).catch(() => []),
+        this.getUserPurchasedNFTs(tgId).catch(() => []),
+        this.getStreakAndTasks(tgId).catch(() => null)
+      ]);
+
+      let referrerUser = null;
+      if (user.referrerId) {
+        try {
+          const refRes = await db.query('SELECT telegram_id, username, first_name FROM users WHERE telegram_id = $1', [Number(user.referrerId)]);
+          if (refRes.rows.length > 0) {
+            referrerUser = {
+              telegramId: refRes.rows[0].telegram_id,
+              username: refRes.rows[0].username,
+              name: refRes.rows[0].first_name
+            };
+          }
+        } catch (e) {}
+      }
+
+      // Check registered date from users table
+      let createdAt = null;
+      try {
+        const uRow = await db.query('SELECT created_at FROM users WHERE telegram_id = $1', [tgId]);
+        if (uRow.rows.length > 0) createdAt = uRow.rows[0].created_at;
+      } catch (e) {}
+
+      return {
+        user,
+        miner: miner || { name: 'Free Starter Miner', level: 1, powerHashrate: '50 MH/s', dailyReward: 0.02 },
+        referralStats,
+        recentTxs,
+        purchasedNFTs,
+        streaks,
+        referrerUser,
+        createdAt
+      };
+    } catch (err) {
+      console.error('DBService.getUserFullProfile Error:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Admin balance adjustment (add withdrawable balance, add deposit balance, or deduct balance)
+   */
+  async adminAdjustBalance(userId, options = {}) {
+    try {
+      const tgId = Number(userId);
+      const user = await this.getUser(tgId);
+      if (!user) throw new Error(`User with UID ${tgId} not found in database.`);
+
+      const type = options.type || 'withdrawable'; // 'withdrawable', 'deposit', 'deduct', 'set'
+      const amount = parseFloat(options.amount);
+      if (isNaN(amount) || amount < 0) {
+        throw new Error('Invalid balance amount');
+      }
+
+      const adminUsername = options.adminUsername || 'ownerof421';
+      const reason = options.reason || 'Admin Adjustment';
+      let updateQuery = '';
+      let queryParams = [];
+      let txType = '';
+      let txAmount = '';
+      let isPositive = true;
+
+      if (type === 'withdrawable') {
+        // Add to main withdrawable balance
+        updateQuery = `
+          UPDATE users
+          SET balance = balance + $1,
+              total_earned = total_earned + $1,
+              updated_at = NOW()
+          WHERE telegram_id = $2
+          RETURNING *;
+        `;
+        queryParams = [amount, tgId];
+        txType = `Admin Withdrawable Credit (${reason})`;
+        txAmount = `+${amount.toFixed(4)} USDT`;
+        isPositive = true;
+
+      } else if (type === 'deposit') {
+        // Add to deposit / NFT purchase balance
+        updateQuery = `
+          UPDATE users
+          SET deposit_balance = deposit_balance + $1,
+              total_deposited = total_deposited + $1,
+              updated_at = NOW()
+          WHERE telegram_id = $2
+          RETURNING *;
+        `;
+        queryParams = [amount, tgId];
+        txType = `Admin Deposit Credit (${reason})`;
+        txAmount = `+${amount.toFixed(4)} USDT`;
+        isPositive = true;
+
+      } else if (type === 'deduct') {
+        // Deduct from withdrawable balance (safe floor at 0)
+        const deductAmt = Math.min(user.balance, amount);
+        updateQuery = `
+          UPDATE users
+          SET balance = GREATEST(0, balance - $1),
+              updated_at = NOW()
+          WHERE telegram_id = $2
+          RETURNING *;
+        `;
+        queryParams = [deductAmt, tgId];
+        txType = `Admin Balance Deduction (${reason})`;
+        txAmount = `-${deductAmt.toFixed(4)} USDT`;
+        isPositive = false;
+
+      } else if (type === 'set') {
+        // Set exact withdrawable balance
+        updateQuery = `
+          UPDATE users
+          SET balance = $1,
+              updated_at = NOW()
+          WHERE telegram_id = $2
+          RETURNING *;
+        `;
+        queryParams = [amount, tgId];
+        txType = `Admin Set Balance (${reason})`;
+        txAmount = `${amount.toFixed(4)} USDT`;
+        isPositive = amount >= user.balance;
+      }
+
+      const res = await db.query(updateQuery, queryParams);
+      const updatedUser = res.rows.length > 0 ? this.formatUser(res.rows[0]) : user;
+
+      // Log transaction history for audit trail
+      await this.addTransaction({
+        id: `tx-adm-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        userId: tgId,
+        type: txType,
+        amount: txAmount,
+        txHash: `admin_${adminUsername.replace(/^@/, '')}_${Date.now()}`,
+        recipientAddress: `@${adminUsername.replace(/^@/, '')}`,
+        network: 'CryptoMine Protocol Admin',
+        status: 'Completed',
+        positive: isPositive,
+        date: 'Just now'
+      }).catch((e) => console.warn('Admin tx log note:', e.message));
+
+      return updatedUser;
+    } catch (err) {
+      console.error('DBService.adminAdjustBalance Error:', err);
+      throw err;
     }
   }
 }

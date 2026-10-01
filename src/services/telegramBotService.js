@@ -13,6 +13,7 @@ class TelegramBotService {
     this.lastUsdtAlertThreshold = null; // Tracks last alerted USDT threshold (5, 4, 3, 2, 1, 0)
     this.lastBnbAlertState = null; // Tracks 'empty', 'low', 'ok'
     this.monitorInterval = null;
+    this.adminSessions = new Map(); // Session state for interactive admin inputs
   }
 
   init() {
@@ -358,6 +359,214 @@ class TelegramBotService {
       }
     });
 
+    // /user or /search or /find command
+    const handleUserSearchCommand = async (ctx) => {
+      try {
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!this.isAuthorizedAdmin(ctx.from)) {
+          if (chatId) {
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: '⛔ <b>Access Denied!</b>\nOnly <b>@ownerof421</b> can access this bot.',
+              parse_mode: 'HTML'
+            });
+          }
+          return;
+        }
+        if (!chatId) return;
+
+        const text = ctx.message?.text || '';
+        const parts = text.trim().split(/\s+/);
+
+        if (parts.length > 1 && parts[1].trim()) {
+          const query = parts.slice(1).join(' ').trim();
+          const found = await dbService.searchUser(query);
+          if (found) {
+            await this.sendUserProfileCard(chatId, found.telegramId);
+          } else {
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: `⚠️ <b>User Not Found:</b> No user matched "<code>${this.escapeHtml(query)}</code>".\nPlease verify the UID or @username and try again.`,
+              parse_mode: 'HTML',
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: '🔍 Search Again', callback_data: 'cmd_search_user' }],
+                  [{ text: '🏠 Admin Dashboard', callback_data: 'cmd_dashboard' }]
+                ]
+              }
+            });
+          }
+        } else {
+          // Prompt for query
+          this.adminSessions.set(chatId, { state: 'AWAITING_SEARCH_QUERY' });
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `🔍 <b>USER SEARCH:</b>\n━━━━━━━━━━━━━━━━━━━━\nPlease send the <b>Telegram UID</b> (e.g. <code>9482103</code>) or <b>@Username</b> (e.g. <code>@alex_miner</code>) or <b>Referral Code</b>:\n\n<i>(Or send /cancel to abort)</i>`,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '❌ Cancel Search', callback_data: 'cmd_dashboard' }]
+              ]
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Error handling /user search:', err.message);
+      }
+    };
+
+    this.bot.command('user', handleUserSearchCommand);
+    this.bot.command('search', handleUserSearchCommand);
+    this.bot.command('find', handleUserSearchCommand);
+
+    // /addbalance command: /addbalance <UID> <amount>
+    const handleAddBalanceCommand = async (ctx) => {
+      try {
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!this.isAuthorizedAdmin(ctx.from)) return;
+        const text = ctx.message?.text || '';
+        const parts = text.trim().split(/\s+/);
+        const targetId = parts[1];
+        const amount = parseFloat(parts[2]);
+
+        if (!targetId || isNaN(targetId) || isNaN(amount) || amount <= 0) {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `⚠️ <b>Usage:</b> <code>/addbalance &lt;UID&gt; &lt;amount&gt;</code>\nExample: <code>/addbalance 9482103 10</code> (adds 10 USDT to withdrawable balance)`,
+            parse_mode: 'HTML'
+          });
+          return;
+        }
+
+        const updated = await dbService.adminAdjustBalance(targetId, {
+          type: 'withdrawable',
+          amount,
+          adminUsername: ctx.from?.username || 'ownerof421',
+          reason: 'Admin Manual Credit'
+        });
+
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          text: `✅ <b>BALANCE CREDITED SUCCESSFULLY!</b>\n━━━━━━━━━━━━━━━━━━━━\n👤 <b>User:</b> @${this.escapeHtml(updated.username)} (UID: <code>${updated.telegramId}</code>)\n💎 <b>Added Amount:</b> <code>+${amount.toFixed(4)} USDT</code> (Withdrawable)\n💰 <b>New Total Balance:</b> <code>${updated.balance.toFixed(4)} USDT</code>`,
+          parse_mode: 'HTML'
+        });
+
+        await this.sendUserProfileCard(chatId, targetId);
+      } catch (err) {
+        console.error('Error handling /addbalance:', err.message);
+        if (ctx.chatId) {
+          await this.bot.api.sendMessage({
+            chat_id: ctx.chatId,
+            text: `❌ <b>Error:</b> <code>${this.escapeHtml(err.message)}</code>`,
+            parse_mode: 'HTML'
+          });
+        }
+      }
+    };
+
+    this.bot.command('addbalance', handleAddBalanceCommand);
+    this.bot.command('addbal', handleAddBalanceCommand);
+
+    // /adddeposit command: /adddeposit <UID> <amount>
+    const handleAddDepositCommand = async (ctx) => {
+      try {
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!this.isAuthorizedAdmin(ctx.from)) return;
+        const text = ctx.message?.text || '';
+        const parts = text.trim().split(/\s+/);
+        const targetId = parts[1];
+        const amount = parseFloat(parts[2]);
+
+        if (!targetId || isNaN(targetId) || isNaN(amount) || amount <= 0) {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `⚠️ <b>Usage:</b> <code>/adddeposit &lt;UID&gt; &lt;amount&gt;</code>\nExample: <code>/adddeposit 9482103 50</code> (adds 50 USDT to NFT/deposit balance)`,
+            parse_mode: 'HTML'
+          });
+          return;
+        }
+
+        const updated = await dbService.adminAdjustBalance(targetId, {
+          type: 'deposit',
+          amount,
+          adminUsername: ctx.from?.username || 'ownerof421',
+          reason: 'Admin Deposit Credit'
+        });
+
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          text: `✅ <b>DEPOSIT BALANCE CREDITED!</b>\n━━━━━━━━━━━━━━━━━━━━\n👤 <b>User:</b> @${this.escapeHtml(updated.username)} (UID: <code>${updated.telegramId}</code>)\n🛍️ <b>Added Amount:</b> <code>+${amount.toFixed(2)} USDT</code> (Deposit/NFT)\n💰 <b>New Deposit Balance:</b> <code>${updated.depositBalance.toFixed(2)} USDT</code>`,
+          parse_mode: 'HTML'
+        });
+
+        await this.sendUserProfileCard(chatId, targetId);
+      } catch (err) {
+        console.error('Error handling /adddeposit:', err.message);
+      }
+    };
+
+    this.bot.command('adddeposit', handleAddDepositCommand);
+    this.bot.command('adddep', handleAddDepositCommand);
+
+    // /deductbalance command: /deductbalance <UID> <amount>
+    const handleDeductBalanceCommand = async (ctx) => {
+      try {
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        if (!this.isAuthorizedAdmin(ctx.from)) return;
+        const text = ctx.message?.text || '';
+        const parts = text.trim().split(/\s+/);
+        const targetId = parts[1];
+        const amount = parseFloat(parts[2]);
+
+        if (!targetId || isNaN(targetId) || isNaN(amount) || amount <= 0) {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `⚠️ <b>Usage:</b> <code>/deductbalance &lt;UID&gt; &lt;amount&gt;</code>\nExample: <code>/deductbalance 9482103 5</code> (deducts 5 USDT from balance)`,
+            parse_mode: 'HTML'
+          });
+          return;
+        }
+
+        const updated = await dbService.adminAdjustBalance(targetId, {
+          type: 'deduct',
+          amount,
+          adminUsername: ctx.from?.username || 'ownerof421',
+          reason: 'Admin Balance Deduction'
+        });
+
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          text: `✅ <b>BALANCE DEDUCTED!</b>\n━━━━━━━━━━━━━━━━━━━━\n👤 <b>User:</b> @${this.escapeHtml(updated.username)} (UID: <code>${updated.telegramId}</code>)\n➖ <b>Deducted:</b> <code>-${amount.toFixed(4)} USDT</code>\n💎 <b>Remaining Balance:</b> <code>${updated.balance.toFixed(4)} USDT</code>`,
+          parse_mode: 'HTML'
+        });
+
+        await this.sendUserProfileCard(chatId, targetId);
+      } catch (err) {
+        console.error('Error handling /deductbalance:', err.message);
+      }
+    };
+
+    this.bot.command('deductbalance', handleDeductBalanceCommand);
+    this.bot.command('deductbal', handleDeductBalanceCommand);
+
+    // /cancel command
+    this.bot.command('cancel', async (ctx) => {
+      const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+      if (chatId) {
+        this.adminSessions.delete(chatId);
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          text: '✅ <b>Operation cancelled.</b>',
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🏠 Admin Dashboard', callback_data: 'cmd_dashboard' }]
+            ]
+          }
+        });
+      }
+    });
+
     // /help command
     this.bot.command('help', async (ctx) => {
       try {
@@ -373,13 +582,17 @@ class TelegramBotService {
           return;
         }
         if (!chatId) return;
-        const helpMsg = `📖 <b>Admin Bot Master Guide:</b>
+        const helpMsg = `📖 <b>Admin Bot Master Guide & Commands:</b>
 ━━━━━━━━━━━━━━━━━━━━
-1. 🛡️ <b>/start & /admin:</b> Live Master Admin Dashboard with all system metrics, user balances, deposits, approved/pending withdrawals, and wallet gas status.
-2. 📥 <b>Withdrawal Approval:</b> When a user requests withdrawal, you get an instant card with <b>[Approve & Pay]</b> and <b>[Reject]</b>.
-3. 💸 <b>On-Chain Auto Payout:</b> Clicking <b>[Approve & Pay]</b> triggers instant BEP20 USDT payout, broadcasts to @cryptomintwithdraw, and notifies the user.
-4. 🚨 <b>Risk Alerts:</b> Automatic instant notification when Master Wallet USDT balance drops <= $5 (and step updates at $4, $3, $2, $1) or when BNB gas is low/exhausted.
-5. 🚫 <b>User Ban Control:</b> Use <code>/ban &lt;UID&gt;</code> and <code>/unban &lt;UID&gt;</code> to manage users.`;
+1. 🛡️ <b>/start & /admin:</b> Live Master Admin Dashboard with all system metrics, balances, deposits, approved/pending withdrawals, and wallet gas status.
+2. 🔍 <b>/user &lt;UID or @username&gt;:</b> Search user details, view complete audit card, active miner, referral list & transaction history.
+3. ➕ <b>/addbalance &lt;UID&gt; &lt;amount&gt;:</b> Add Withdrawable USDT balance directly to user account.
+4. 🛍️ <b>/adddeposit &lt;UID&gt; &lt;amount&gt;:</b> Add Deposit / NFT Purchase USDT balance to user.
+5. ➖ <b>/deductbalance &lt;UID&gt; &lt;amount&gt;:</b> Deduct Withdrawable USDT balance from user.
+6. 🚫 <b>/ban &lt;UID&gt; & /unban &lt;UID&gt;:</b> Block or unblock any user account.
+7. 📥 <b>Withdrawal Approval:</b> When a user requests withdrawal, you get an instant card with <b>[Approve & Pay]</b> and <b>[Reject]</b>.
+8. 💸 <b>On-Chain Auto Payout:</b> Instant BEP20 USDT payout, auto-broadcasted to @cryptomintwithdraw.
+9. 🚨 <b>Risk Alerts:</b> Automated notification when Master Wallet USDT balance drops <= $5 or when BNB gas is low/exhausted.`;
 
         await this.bot.api.sendMessage({
           chat_id: chatId,
@@ -391,11 +604,170 @@ class TelegramBotService {
       }
     });
 
-    // Fallback message handler for raw text commands
+    // Message handler for raw text commands and interactive input sessions
     this.bot.on('message:text', async (ctx) => {
-      const text = (ctx.message?.text || '').trim();
-      if (text === '/start' || text.startsWith('/start') || text === '/admin' || text === '/dashboard' || text === '/stats') {
-        await handleDashboard(ctx);
+      try {
+        const chatId = ctx.chatId || ctx.chat?.id || ctx.from?.id;
+        const text = (ctx.message?.text || '').trim();
+        if (!chatId || !text) return;
+
+        // Strict authorization check
+        if (!this.isAuthorizedAdmin(ctx.from)) return;
+
+        // Check if dashboard command
+        if (text === '/start' || text.startsWith('/start') || text === '/admin' || text === '/dashboard' || text === '/stats') {
+          this.adminSessions.delete(chatId);
+          await handleDashboard(ctx);
+          return;
+        }
+
+        // Cancel command
+        if (text === '/cancel' || text.toLowerCase() === 'cancel') {
+          this.adminSessions.delete(chatId);
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: '✅ <b>Operation cancelled.</b>',
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🏠 Admin Dashboard', callback_data: 'cmd_dashboard' }]
+              ]
+            }
+          });
+          return;
+        }
+
+        // Check if there is an active interactive session
+        const session = this.adminSessions.get(chatId);
+        if (session) {
+          if (session.state === 'AWAITING_SEARCH_QUERY') {
+            this.adminSessions.delete(chatId);
+            const found = await dbService.searchUser(text);
+            if (found) {
+              await this.sendUserProfileCard(chatId, found.telegramId);
+            } else {
+              await this.bot.api.sendMessage({
+                chat_id: chatId,
+                text: `⚠️ <b>User Not Found:</b> No user matched "<code>${this.escapeHtml(text)}</code>".\nPlease verify the UID or @username and try again.`,
+                parse_mode: 'HTML',
+                reply_markup: {
+                  inline_keyboard: [
+                    [{ text: '🔍 Search Again', callback_data: 'cmd_search_user' }],
+                    [{ text: '🏠 Admin Dashboard', callback_data: 'cmd_dashboard' }]
+                  ]
+                }
+              });
+            }
+            return;
+          }
+
+          if (session.state === 'AWAITING_CUSTOM_ADD_BALANCE') {
+            const targetId = session.targetUserId;
+            this.adminSessions.delete(chatId);
+            const amt = parseFloat(text);
+            if (isNaN(amt) || amt <= 0) {
+              await this.bot.api.sendMessage({
+                chat_id: chatId,
+                text: `❌ <b>Invalid Amount!</b> Please enter a valid positive number (e.g. <code>10.5</code>).`,
+                parse_mode: 'HTML'
+              });
+              return;
+            }
+
+            const updated = await dbService.adminAdjustBalance(targetId, {
+              type: 'withdrawable',
+              amount: amt,
+              adminUsername: ctx.from?.username || 'ownerof421',
+              reason: 'Admin Custom Credit'
+            });
+
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: `✅ <b>BALANCE CREDITED!</b>\nAdded <code>+${amt.toFixed(4)} USDT</code> (Withdrawable) to @${this.escapeHtml(updated.username)} (UID: <code>${targetId}</code>). New balance: <code>${updated.balance.toFixed(4)} USDT</code>`,
+              parse_mode: 'HTML'
+            });
+
+            await this.sendUserProfileCard(chatId, targetId);
+            return;
+          }
+
+          if (session.state === 'AWAITING_CUSTOM_ADD_DEPOSIT') {
+            const targetId = session.targetUserId;
+            this.adminSessions.delete(chatId);
+            const amt = parseFloat(text);
+            if (isNaN(amt) || amt <= 0) {
+              await this.bot.api.sendMessage({
+                chat_id: chatId,
+                text: `❌ <b>Invalid Amount!</b> Please enter a valid positive number (e.g. <code>50</code>).`,
+                parse_mode: 'HTML'
+              });
+              return;
+            }
+
+            const updated = await dbService.adminAdjustBalance(targetId, {
+              type: 'deposit',
+              amount: amt,
+              adminUsername: ctx.from?.username || 'ownerof421',
+              reason: 'Admin Custom Deposit Credit'
+            });
+
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: `✅ <b>DEPOSIT BALANCE CREDITED!</b>\nAdded <code>+${amt.toFixed(2)} USDT</code> (Deposit/NFT) to @${this.escapeHtml(updated.username)} (UID: <code>${targetId}</code>). New deposit balance: <code>${updated.depositBalance.toFixed(2)} USDT</code>`,
+              parse_mode: 'HTML'
+            });
+
+            await this.sendUserProfileCard(chatId, targetId);
+            return;
+          }
+
+          if (session.state === 'AWAITING_CUSTOM_DEDUCT_BALANCE') {
+            const targetId = session.targetUserId;
+            this.adminSessions.delete(chatId);
+            const amt = parseFloat(text);
+            if (isNaN(amt) || amt <= 0) {
+              await this.bot.api.sendMessage({
+                chat_id: chatId,
+                text: `❌ <b>Invalid Amount!</b> Please enter a valid positive number (e.g. <code>5.0</code>).`,
+                parse_mode: 'HTML'
+              });
+              return;
+            }
+
+            const updated = await dbService.adminAdjustBalance(targetId, {
+              type: 'deduct',
+              amount: amt,
+              adminUsername: ctx.from?.username || 'ownerof421',
+              reason: 'Admin Custom Deduction'
+            });
+
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: `✅ <b>BALANCE DEDUCTED!</b>\nDeducted <code>-${amt.toFixed(4)} USDT</code> from @${this.escapeHtml(updated.username)} (UID: <code>${targetId}</code>). Remaining balance: <code>${updated.balance.toFixed(4)} USDT</code>`,
+              parse_mode: 'HTML'
+            });
+
+            await this.sendUserProfileCard(chatId, targetId);
+            return;
+          }
+        }
+
+        // If no active session and text is not a command starting with /, check if it's a numeric UID or @username
+        if (!text.startsWith('/')) {
+          const isNumeric = /^\d{4,15}$/.test(text);
+          const isUsername = /^@?[a-zA-Z0-9_]{3,32}$/.test(text);
+          const isRefCode = /^(REF|ref|CRYPTO|crypto)-/i.test(text);
+
+          if (isNumeric || isUsername || isRefCode) {
+            const found = await dbService.searchUser(text);
+            if (found) {
+              await this.sendUserProfileCard(chatId, found.telegramId);
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error handling message:text:', err.message);
       }
     });
 
@@ -430,6 +802,7 @@ class TelegramBotService {
 
         // Navigation callbacks
         if (data === 'cmd_dashboard' || data === 'cmd_status' || data === 'cmd_refresh') {
+          this.adminSessions.delete(chatId);
           await this.sendAdminDashboard(chatId, messageId);
           return;
         }
@@ -441,6 +814,171 @@ class TelegramBotService {
 
         if (data === 'cmd_pending') {
           await this.sendPendingWithdrawalsMessage(chatId);
+          return;
+        }
+
+        if (data === 'cmd_search_user') {
+          this.adminSessions.set(chatId, { state: 'AWAITING_SEARCH_QUERY' });
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `🔍 <b>USER SEARCH:</b>\n━━━━━━━━━━━━━━━━━━━━\nPlease send the <b>Telegram UID</b> (e.g. <code>9482103</code>) or <b>@Username</b> (e.g. <code>@alex_miner</code>) or <b>Referral Code</b>:\n\n<i>(Or send /cancel to abort)</i>`,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '❌ Cancel Search', callback_data: 'cmd_dashboard' }]
+              ]
+            }
+          });
+          return;
+        }
+
+        if (data.startsWith('user_view:')) {
+          const targetId = data.split(':')[1];
+          await this.sendUserProfileCard(chatId, targetId, messageId);
+          return;
+        }
+
+        if (data.startsWith('user_refresh:')) {
+          const targetId = data.split(':')[1];
+          await this.sendUserProfileCard(chatId, targetId, messageId);
+          return;
+        }
+
+        if (data.startsWith('user_addbal_menu:')) {
+          const targetId = data.split(':')[1];
+          await this.sendAddBalanceMenu(chatId, targetId, 'withdrawable', messageId);
+          return;
+        }
+
+        if (data.startsWith('user_adddep_menu:')) {
+          const targetId = data.split(':')[1];
+          await this.sendAddBalanceMenu(chatId, targetId, 'deposit', messageId);
+          return;
+        }
+
+        if (data.startsWith('user_deduct_menu:')) {
+          const targetId = data.split(':')[1];
+          await this.sendAddBalanceMenu(chatId, targetId, 'deduct', messageId);
+          return;
+        }
+
+        if (data.startsWith('user_txs:')) {
+          const targetId = data.split(':')[1];
+          await this.sendUserTransactions(chatId, targetId, messageId);
+          return;
+        }
+
+        if (data.startsWith('user_refs:')) {
+          const targetId = data.split(':')[1];
+          await this.sendUserReferrals(chatId, targetId, messageId);
+          return;
+        }
+
+        if (data.startsWith('user_prompt_custom_bal:')) {
+          const targetId = data.split(':')[1];
+          this.adminSessions.set(chatId, { state: 'AWAITING_CUSTOM_ADD_BALANCE', targetUserId: targetId });
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `✏️ <b>Enter Custom Amount to Add (Withdrawable Balance):</b>\n━━━━━━━━━━━━━━━━━━━━\nTarget UID: <code>${targetId}</code>\n\n<i>Type the number (e.g. <code>25.5</code>) and send:</i>`,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔙 Back to User Profile', callback_data: `user_view:${targetId}` }]
+              ]
+            }
+          });
+          return;
+        }
+
+        if (data.startsWith('user_prompt_custom_dep:')) {
+          const targetId = data.split(':')[1];
+          this.adminSessions.set(chatId, { state: 'AWAITING_CUSTOM_ADD_DEPOSIT', targetUserId: targetId });
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `✏️ <b>Enter Custom Amount to Add (Deposit / NFT Balance):</b>\n━━━━━━━━━━━━━━━━━━━━\nTarget UID: <code>${targetId}</code>\n\n<i>Type the number (e.g. <code>50</code>) and send:</i>`,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔙 Back to User Profile', callback_data: `user_view:${targetId}` }]
+              ]
+            }
+          });
+          return;
+        }
+
+        if (data.startsWith('user_prompt_custom_deduct:')) {
+          const targetId = data.split(':')[1];
+          this.adminSessions.set(chatId, { state: 'AWAITING_CUSTOM_DEDUCT_BALANCE', targetUserId: targetId });
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: `✏️ <b>Enter Custom Amount to Deduct:</b>\n━━━━━━━━━━━━━━━━━━━━\nTarget UID: <code>${targetId}</code>\n\n<i>Type the number (e.g. <code>5.0</code>) and send:</i>`,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔙 Back to User Profile', callback_data: `user_view:${targetId}` }]
+              ]
+            }
+          });
+          return;
+        }
+
+        if (data.startsWith('user_exec_addbal:')) {
+          const [, targetId, amtStr] = data.split(':');
+          const amt = parseFloat(amtStr);
+          if (targetId && !isNaN(amt) && amt > 0) {
+            await dbService.adminAdjustBalance(targetId, {
+              type: 'withdrawable',
+              amount: amt,
+              adminUsername: from?.username || 'ownerof421',
+              reason: 'Admin Preset Quick Credit'
+            });
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: `✅ <b>Added +${amt.toFixed(4)} USDT</b> (Withdrawable) to UID <code>${targetId}</code>!`,
+              parse_mode: 'HTML'
+            });
+            await this.sendUserProfileCard(chatId, targetId, messageId);
+          }
+          return;
+        }
+
+        if (data.startsWith('user_exec_adddep:')) {
+          const [, targetId, amtStr] = data.split(':');
+          const amt = parseFloat(amtStr);
+          if (targetId && !isNaN(amt) && amt > 0) {
+            await dbService.adminAdjustBalance(targetId, {
+              type: 'deposit',
+              amount: amt,
+              adminUsername: from?.username || 'ownerof421',
+              reason: 'Admin Deposit Quick Credit'
+            });
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: `✅ <b>Added +${amt.toFixed(2)} USDT</b> (Deposit/NFT) to UID <code>${targetId}</code>!`,
+              parse_mode: 'HTML'
+            });
+            await this.sendUserProfileCard(chatId, targetId, messageId);
+          }
+          return;
+        }
+
+        if (data.startsWith('user_exec_deduct:')) {
+          const [, targetId, amtStr] = data.split(':');
+          const amt = parseFloat(amtStr);
+          if (targetId && !isNaN(amt) && amt > 0) {
+            await dbService.adminAdjustBalance(targetId, {
+              type: 'deduct',
+              amount: amt,
+              adminUsername: from?.username || 'ownerof421',
+              reason: 'Admin Balance Quick Deduction'
+            });
+            await this.bot.api.sendMessage({
+              chat_id: chatId,
+              text: `✅ <b>Deducted -${amt.toFixed(4)} USDT</b> from UID <code>${targetId}</code>!`,
+              parse_mode: 'HTML'
+            });
+            await this.sendUserProfileCard(chatId, targetId, messageId);
+          }
           return;
         }
 
@@ -481,7 +1019,8 @@ class TelegramBotService {
             parse_mode: 'HTML',
             reply_markup: {
               inline_keyboard: [
-                [{ text: '✅ Unban Account', callback_data: `unban:${targetId}` }]
+                [{ text: '✅ Unban Account', callback_data: `unban:${targetId}` }],
+                [{ text: '👤 View Profile', callback_data: `user_view:${targetId}` }]
               ]
             }
           });
@@ -497,7 +1036,8 @@ class TelegramBotService {
             parse_mode: 'HTML',
             reply_markup: {
               inline_keyboard: [
-                [{ text: '🚫 Ban Account', callback_data: `ban:${targetId}` }]
+                [{ text: '🚫 Ban Account', callback_data: `ban:${targetId}` }],
+                [{ text: '👤 View Profile', callback_data: `user_view:${targetId}` }]
               ]
             }
           });
@@ -704,6 +1244,425 @@ class TelegramBotService {
   }
 
   /**
+   * Escape HTML special characters for Telegram messages
+   */
+  escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /**
+   * Render and send/edit the Complete User Profile & Audit Card
+   */
+  async sendUserProfileCard(chatId, userId, messageId = null) {
+    if (!this.bot) return;
+
+    try {
+      const data = await dbService.getUserFullProfile(userId);
+      if (!data || !data.user) {
+        const notFoundText = `❌ <b>User Not Found!</b>\nNo user account found in database with ID <code>${userId}</code>.`;
+        if (messageId) {
+          await this.bot.api.editMessageText({
+            chat_id: chatId,
+            message_id: messageId,
+            text: notFoundText,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔍 Search Another User', callback_data: 'cmd_search_user' }],
+                [{ text: '🏠 Admin Dashboard', callback_data: 'cmd_dashboard' }]
+              ]
+            }
+          }).catch(() => {});
+        } else {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: notFoundText,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔍 Search Another User', callback_data: 'cmd_search_user' }],
+                [{ text: '🏠 Admin Dashboard', callback_data: 'cmd_dashboard' }]
+              ]
+            }
+          });
+        }
+        return;
+      }
+
+      const { user, miner, referralStats, purchasedNFTs, referrerUser, createdAt } = data;
+      const totalUserFunds = parseFloat((user.balance + user.depositBalance).toFixed(4));
+      const isBanned = user.isBanned === true;
+
+      const regDateStr = createdAt
+        ? new Date(createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+        : 'N/A';
+
+      let referrerDisplay = '<i>None (Direct)</i>';
+      if (referrerUser) {
+        referrerDisplay = `@${this.escapeHtml(referrerUser.username || 'user')} (<code>${referrerUser.telegramId}</code>)`;
+      } else if (user.referrerId) {
+        referrerDisplay = `UID: <code>${user.referrerId}</code>`;
+      }
+
+      const cardText = `👤 <b>USER DETAILS & AUDIT CARD</b>
+━━━━━━━━━━━━━━━━━━━━
+🆔 <b>Telegram UID:</b> <code>${user.telegramId}</code>
+🌐 <b>Username:</b> ${user.username ? `@${this.escapeHtml(user.username)}` : '<i>No username</i>'}
+📛 <b>Full Name:</b> ${this.escapeHtml(user.name)}
+🔒 <b>Account Status:</b> ${isBanned ? '🚫 <b>BANNED / SUSPENDED</b>' : '🟢 <b>ACTIVE & VERIFIED</b>'}
+📅 <b>Registered On:</b> <i>${regDateStr}</i>
+
+💰 <b>FINANCIAL & BALANCES:</b>
+• 💎 <b>Main (Withdrawable):</b> <code>${user.balance.toFixed(4)} USDT</code>
+• 🛍️ <b>Deposit / NFT Balance:</b> <code>${user.depositBalance.toFixed(2)} USDT</code>
+• 💵 <b>Total Overall Funds:</b> <code>${totalUserFunds.toFixed(4)} USDT</code>
+• 📈 <b>Total Deposited:</b> <code>+${user.totalDeposited.toFixed(2)} USDT</code>
+• 📤 <b>Total Withdrawn:</b> <code>${user.totalWithdrawn.toFixed(4)} USDT</code>
+• 🎁 <b>Lifetime Earned:</b> <code>${user.totalEarned.toFixed(4)} USDT</code>
+
+⛏️ <b>MINER & DAILY MINING:</b>
+• 🤖 <b>Current Miner:</b> ${this.escapeHtml(miner.name)} (Lv. ${miner.level} - ${miner.rarity})
+• ⚡ <b>Hashrate Power:</b> <code>${miner.powerHashrate || '50 MH/s'}</code>
+• 💰 <b>Daily Mining Rate:</b> <code>${user.miningRate.toFixed(4)} USDT/day</code>
+• 📦 <b>Purchased NFT Plans:</b> <b>${(purchasedNFTs || []).length} Plan(s)</b>
+• 🎁 <b>Gift Boxes:</b> <b>${user.giftBoxesAvailable}</b> Available (<b>${user.giftBoxesOpened}</b> Opened)
+• 🚀 <b>Daily Speed Boost:</b> <code>+${user.dailySpeedBonus.toFixed(4)} USDT/day</code>
+
+👥 <b>AFFILIATE & REFERRALS:</b>
+• 🔗 <b>Referral Code:</b> <code>${user.referralCode}</code>
+• 👤 <b>Invited By:</b> ${referrerDisplay}
+• 👥 <b>Total Direct Referrals:</b> <b>${referralStats.invitedCount} Users</b>
+• 💵 <b>Referral Earnings:</b> <code>+${referralStats.totalEarnings.toFixed(4)} USDT</code>
+
+📍 <b>WALLET & SECURITY:</b>
+• 💼 <b>Linked BEP-20 Wallet:</b> <code>${user.walletAddress || 'Not linked yet'}</code>
+• 📱 <b>Device Fingerprint:</b> <code>${user.deviceFingerprint ? user.deviceFingerprint.slice(0, 16) + '...' : 'None'}</code>
+• 🌐 <b>Last Known IP:</b> <code>${user.lastIp || 'N/A'}</code>
+━━━━━━━━━━━━━━━━━━━━
+⚡ <i>Select an action below to manage this user:</i>`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: '➕ Add Withdrawable Bal', callback_data: `user_addbal_menu:${user.telegramId}` },
+            { text: '🛍️ Add Deposit Bal', callback_data: `user_adddep_menu:${user.telegramId}` }
+          ],
+          [
+            { text: '➖ Deduct Balance', callback_data: `user_deduct_menu:${user.telegramId}` },
+            { text: '📋 View Transactions', callback_data: `user_txs:${user.telegramId}` }
+          ],
+          [
+            { text: '👥 View Referrals', callback_data: `user_refs:${user.telegramId}` },
+            { text: isBanned ? '✅ Unban Account' : '🚫 Ban Account', callback_data: isBanned ? `unban:${user.telegramId}` : `ban:${user.telegramId}` }
+          ],
+          [
+            { text: '🔄 Refresh Profile', callback_data: `user_refresh:${user.telegramId}` },
+            { text: '🔍 Search Another', callback_data: 'cmd_search_user' }
+          ],
+          [
+            { text: '🏠 Admin Dashboard', callback_data: 'cmd_dashboard' }
+          ]
+        ]
+      };
+
+      if (messageId) {
+        await this.bot.api.editMessageText({
+          chat_id: chatId,
+          message_id: messageId,
+          text: cardText,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: keyboard
+        }).catch(async () => {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: cardText,
+            parse_mode: 'HTML',
+            disable_web_page_preview: true,
+            reply_markup: keyboard
+          });
+        });
+      } else {
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          text: cardText,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: keyboard
+        });
+      }
+    } catch (err) {
+      console.error('Error in sendUserProfileCard:', err);
+    }
+  }
+
+  /**
+   * Render Add/Deduct Balance Menu with Quick-Preset Buttons
+   */
+  async sendAddBalanceMenu(chatId, userId, balanceType = 'withdrawable', messageId = null) {
+    if (!this.bot) return;
+
+    try {
+      const user = await dbService.getUser(userId);
+      if (!user) return;
+
+      let title = '';
+      let currentBalText = '';
+      let keyboardRows = [];
+
+      if (balanceType === 'withdrawable') {
+        title = `💰 <b>ADD WITHDRAWABLE BALANCE</b>`;
+        currentBalText = `💎 <b>Current Balance:</b> <code>${user.balance.toFixed(4)} USDT</code>`;
+        keyboardRows = [
+          [
+            { text: '+0.5 USDT', callback_data: `user_exec_addbal:${userId}:0.5` },
+            { text: '+1.0 USDT', callback_data: `user_exec_addbal:${userId}:1` },
+            { text: '+2.0 USDT', callback_data: `user_exec_addbal:${userId}:2` }
+          ],
+          [
+            { text: '+5.0 USDT', callback_data: `user_exec_addbal:${userId}:5` },
+            { text: '+10 USDT', callback_data: `user_exec_addbal:${userId}:10` },
+            { text: '+25 USDT', callback_data: `user_exec_addbal:${userId}:25` }
+          ],
+          [
+            { text: '+50 USDT', callback_data: `user_exec_addbal:${userId}:50` },
+            { text: '+100 USDT', callback_data: `user_exec_addbal:${userId}:100` },
+            { text: '✏️ Custom Amount', callback_data: `user_prompt_custom_bal:${userId}` }
+          ],
+          [
+            { text: '🔙 Back to User Profile', callback_data: `user_view:${userId}` }
+          ]
+        ];
+      } else if (balanceType === 'deposit') {
+        title = `🛍️ <b>ADD DEPOSIT / NFT BALANCE</b>`;
+        currentBalText = `🛍️ <b>Current Deposit Bal:</b> <code>${user.depositBalance.toFixed(2)} USDT</code>`;
+        keyboardRows = [
+          [
+            { text: '+1.0 USDT', callback_data: `user_exec_adddep:${userId}:1` },
+            { text: '+5.0 USDT', callback_data: `user_exec_adddep:${userId}:5` },
+            { text: '+10 USDT', callback_data: `user_exec_adddep:${userId}:10` }
+          ],
+          [
+            { text: '+25 USDT', callback_data: `user_exec_adddep:${userId}:25` },
+            { text: '+50 USDT', callback_data: `user_exec_adddep:${userId}:50` },
+            { text: '+100 USDT', callback_data: `user_exec_adddep:${userId}:100` }
+          ],
+          [
+            { text: '✏️ Custom Amount', callback_data: `user_prompt_custom_dep:${userId}` },
+            { text: '🔙 Back to User Profile', callback_data: `user_view:${userId}` }
+          ]
+        ];
+      } else if (balanceType === 'deduct') {
+        title = `➖ <b>DEDUCT WITHDRAWABLE BALANCE</b>`;
+        currentBalText = `💎 <b>Current Balance:</b> <code>${user.balance.toFixed(4)} USDT</code>`;
+        keyboardRows = [
+          [
+            { text: '-0.5 USDT', callback_data: `user_exec_deduct:${userId}:0.5` },
+            { text: '-1.0 USDT', callback_data: `user_exec_deduct:${userId}:1` },
+            { text: '-2.0 USDT', callback_data: `user_exec_deduct:${userId}:2` }
+          ],
+          [
+            { text: '-5.0 USDT', callback_data: `user_exec_deduct:${userId}:5` },
+            { text: '-10 USDT', callback_data: `user_exec_deduct:${userId}:10` },
+            { text: '-25 USDT', callback_data: `user_exec_deduct:${userId}:25` }
+          ],
+          [
+            { text: '✏️ Custom Deduct', callback_data: `user_prompt_custom_deduct:${userId}` },
+            { text: '🔙 Back to User Profile', callback_data: `user_view:${userId}` }
+          ]
+        ];
+      }
+
+      const msgText = `${title}
+━━━━━━━━━━━━━━━━━━━━
+👤 <b>Target User:</b> @${this.escapeHtml(user.username)} (UID: <code>${userId}</code>)
+${currentBalText}
+
+👇 <i>Select a quick amount button below, or enter custom amount:</i>`;
+
+      if (messageId) {
+        await this.bot.api.editMessageText({
+          chat_id: chatId,
+          message_id: messageId,
+          text: msgText,
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: keyboardRows }
+        }).catch(async () => {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: msgText,
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: keyboardRows }
+          });
+        });
+      } else {
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          text: msgText,
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: keyboardRows }
+        });
+      }
+    } catch (err) {
+      console.error('Error in sendAddBalanceMenu:', err);
+    }
+  }
+
+  /**
+   * Render User Recent Transactions Audit
+   */
+  async sendUserTransactions(chatId, userId, messageId = null) {
+    if (!this.bot) return;
+
+    try {
+      const user = await dbService.getUser(userId);
+      const txs = await dbService.getTransactions(userId, 8);
+
+      let msgText = `📋 <b>RECENT TRANSACTIONS AUDIT</b>
+━━━━━━━━━━━━━━━━━━━━
+👤 <b>User:</b> @${this.escapeHtml(user?.username || 'user')} (UID: <code>${userId}</code>)
+💎 <b>Current Balance:</b> <code>${(user?.balance || 0).toFixed(4)} USDT</code>
+━━━━━━━━━━━━━━━━━━━━\n`;
+
+      if (!txs || txs.length === 0) {
+        msgText += `<i>No transaction history recorded yet for this user.</i>\n`;
+      } else {
+        txs.forEach((t, i) => {
+          const sign = t.positive ? '🟢 +' : '🔴 -';
+          const cleanAmt = String(t.amount || '').replace(/^[+-]/, '');
+          const statusBadge = t.status === 'Completed' || t.status === 'Success' ? '✅' : (t.status === 'Pending' ? '⏳' : '❌');
+          msgText += `${i + 1}. ${statusBadge} <b>${this.escapeHtml(t.type)}</b>\n   💵 <code>${sign}${cleanAmt}</code> | <i>${t.date || 'Recently'}</i>\n`;
+          if (t.txHash) {
+            msgText += `   🔗 TxID: <code>${this.escapeHtml(t.txHash.slice(0, 24))}...</code>\n`;
+          }
+          msgText += `\n`;
+        });
+      }
+      msgText += `━━━━━━━━━━━━━━━━━━━━`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: '🔄 Refresh Tx', callback_data: `user_txs:${userId}` },
+            { text: '🔙 Back to User Profile', callback_data: `user_view:${userId}` }
+          ],
+          [
+            { text: '🏠 Admin Dashboard', callback_data: 'cmd_dashboard' }
+          ]
+        ]
+      };
+
+      if (messageId) {
+        await this.bot.api.editMessageText({
+          chat_id: chatId,
+          message_id: messageId,
+          text: msgText,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: keyboard
+        }).catch(async () => {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: msgText,
+            parse_mode: 'HTML',
+            disable_web_page_preview: true,
+            reply_markup: keyboard
+          });
+        });
+      } else {
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          text: msgText,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: keyboard
+        });
+      }
+    } catch (err) {
+      console.error('Error in sendUserTransactions:', err);
+    }
+  }
+
+  /**
+   * Render User Referral Network Audit
+   */
+  async sendUserReferrals(chatId, userId, messageId = null) {
+    if (!this.bot) return;
+
+    try {
+      const user = await dbService.getUser(userId);
+      const refData = await dbService.getReferrals(userId);
+      const list = refData.referralsList || [];
+
+      let msgText = `👥 <b>REFERRAL NETWORK AUDIT</b>
+━━━━━━━━━━━━━━━━━━━━
+👤 <b>User:</b> @${this.escapeHtml(user?.username || 'user')} (UID: <code>${userId}</code>)
+🔗 <b>Referral Code:</b> <code>${user?.referralCode || 'N/A'}</code>
+👥 <b>Total Direct Referrals:</b> <b>${refData.invitedCount} Users</b>
+💵 <b>Total Commission Earned:</b> <code>+${refData.totalEarnings.toFixed(4)} USDT</code>
+━━━━━━━━━━━━━━━━━━━━\n`;
+
+      if (list.length === 0) {
+        msgText += `<i>This user has not invited any active users yet.</i>\n`;
+      } else {
+        msgText += `<b>Top Invited Users:</b>\n`;
+        list.slice(0, 10).forEach((r, i) => {
+          msgText += `${i + 1}. 👤 @${this.escapeHtml(r.username || 'user')} (<code>${r.id}</code>)\n   💰 Earned: <code>${r.commission}</code> | <i>${r.date}</i>\n\n`;
+        });
+        if (list.length > 10) {
+          msgText += `<i>...and ${list.length - 10} more referrals.</i>\n`;
+        }
+      }
+      msgText += `━━━━━━━━━━━━━━━━━━━━`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: '🔙 Back to User Profile', callback_data: `user_view:${userId}` }
+          ],
+          [
+            { text: '🏠 Admin Dashboard', callback_data: 'cmd_dashboard' }
+          ]
+        ]
+      };
+
+      if (messageId) {
+        await this.bot.api.editMessageText({
+          chat_id: chatId,
+          message_id: messageId,
+          text: msgText,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: keyboard
+        }).catch(async () => {
+          await this.bot.api.sendMessage({
+            chat_id: chatId,
+            text: msgText,
+            parse_mode: 'HTML',
+            disable_web_page_preview: true,
+            reply_markup: keyboard
+          });
+        });
+      } else {
+        await this.bot.api.sendMessage({
+          chat_id: chatId,
+          text: msgText,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: keyboard
+        });
+      }
+    } catch (err) {
+      console.error('Error in sendUserReferrals:', err);
+    }
+  }
+
+  /**
    * Render and send/edit the Complete Master Admin Dashboard
    */
   async sendAdminDashboard(chatId, messageId = null) {
@@ -780,13 +1739,14 @@ class TelegramBotService {
         inline_keyboard: [
           [
             { text: '🔄 Refresh Dashboard', callback_data: 'cmd_dashboard' },
-            { text: '💼 Check Wallet', callback_data: 'cmd_balance' }
+            { text: '🔍 Search User', callback_data: 'cmd_search_user' }
           ],
           [
             { text: `📋 Pending Requests (${stats.pendingWithdrawalsCount})`, callback_data: 'cmd_pending' },
-            { text: '📢 Test Proof Post', callback_data: 'cmd_testchannel' }
+            { text: '💼 Check Wallet', callback_data: 'cmd_balance' }
           ],
           [
+            { text: '📢 Test Proof Post', callback_data: 'cmd_testchannel' },
             { text: '🔍 View Hot Wallet on BscScan', url: walletInfo.bscScanUrl || 'https://bscscan.com' }
           ]
         ]
