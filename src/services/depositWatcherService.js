@@ -5,11 +5,11 @@ const mainBotService = require('./mainBotService');
 
 // BSC RPC Endpoints with automatic fallback (tested for eth_getLogs reliability)
 const BSC_RPCS = [
-  'https://bsc-rpc.publicnode.com',
-  'https://1rpc.io/bnb',
-  'https://bsc.drpc.org',
-  'https://bsc.publicnode.com',
-  'https://bsc-dataseed.binance.org/'
+  'https://bsc-dataseed.binance.org/',
+  'https://bsc-dataseed1.defibit.io/',
+  'https://bsc-dataseed1.ninicoin.io/',
+  'https://binance.llamarpc.com',
+  'https://bsc-rpc.publicnode.com'
 ];
 
 const USDT_BEP20_CONTRACT = process.env.USDT_BEP20_CONTRACT || '0x55d398326f99059fF775485246999027B3197955';
